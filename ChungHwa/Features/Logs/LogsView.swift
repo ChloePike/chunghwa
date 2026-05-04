@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 private enum LogLevelFilter: String, CaseIterable, Identifiable {
     case all, info, warn, error
@@ -33,6 +34,7 @@ struct LogsView: View {
     @State private var filter: LogLevelFilter = .all
     @State private var paused = false
     @State private var frozenLines: [LogLine] = []
+    @State private var query: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -55,8 +57,19 @@ struct LogsView: View {
     }
 
     private var visibleLines: [LogLine] {
-        guard filter != .all else { return sourceLines }
-        return sourceLines.filter { filter.includes($0.stream) }
+        let trimmedQuery = query.trimmingCharacters(in: .whitespaces)
+        return sourceLines.filter { line in
+            guard filter.includes(line.stream) else { return false }
+            if !trimmedQuery.isEmpty,
+               !line.text.localizedCaseInsensitiveContains(trimmedQuery) {
+                return false
+            }
+            return true
+        }
+    }
+
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     // MARK: - Toolbar
@@ -69,12 +82,11 @@ struct LogsView: View {
                 options: LogLevelFilter.allCases.map { ($0, $0.label) }
             )
 
+            searchField
+
             Spacer(minLength: 0)
 
-            Text("\(visibleLines.count) / \(sourceLines.count) lines")
-                .font(ChungHwa.Typography.mono(11))
-                .foregroundStyle(ChungHwa.Palette.faint)
-                .monospacedDigit()
+            countLabel
 
             ChPill(active: paused, action: togglePause) {
                 HStack(spacing: 4) {
@@ -94,6 +106,55 @@ struct LogsView: View {
         }
     }
 
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundStyle(ChungHwa.Palette.faint)
+
+            TextField("Filter…", text: $query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(ChungHwa.Palette.text)
+
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ChungHwa.Palette.faint)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(width: 220, height: 25)
+        .background(ChungHwa.Palette.fill)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(ChungHwa.Palette.line, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var countLabel: some View {
+        let visible = visibleLines.count
+        let total = sourceLines.count
+        if isSearching && visible == 0 {
+            Text("no matches")
+                .font(ChungHwa.Typography.mono(11))
+                .foregroundStyle(ChungHwa.Palette.earth)
+                .monospacedDigit()
+        } else {
+            Text("\(visible) / \(total) lines")
+                .font(ChungHwa.Typography.mono(11))
+                .foregroundStyle(ChungHwa.Palette.faint)
+                .monospacedDigit()
+        }
+    }
+
     // MARK: - Scroll
 
     private var logScroll: some View {
@@ -101,7 +162,7 @@ struct LogsView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(visibleLines) { line in
-                        LogRow(line: line)
+                        LogRow(line: line, query: query)
                             .id(line.id)
                     }
                 }
@@ -112,7 +173,7 @@ struct LogsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: store.lines.count) {
-                guard !paused, let last = visibleLines.last else { return }
+                guard !paused, !isSearching, let last = visibleLines.last else { return }
                 withAnimation(.linear(duration: 0.12)) {
                     proxy.scrollTo(last.id, anchor: .bottom)
                 }
@@ -123,7 +184,13 @@ struct LogsView: View {
                 }
             }
             .onChange(of: paused) { _, nowPaused in
-                if !nowPaused, let last = store.lines.last {
+                if !nowPaused, !isSearching, let last = store.lines.last {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
+            .onChange(of: query) { _, newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty, let last = visibleLines.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
@@ -159,6 +226,7 @@ struct LogsView: View {
 
 private struct LogRow: View {
     let line: LogLine
+    let query: String
 
     private static let formatter: DateFormatter = {
         let f = DateFormatter()
@@ -177,7 +245,7 @@ private struct LogRow: View {
                 .foregroundStyle(levelColor)
                 .frame(width: 44, alignment: .leading)
 
-            Text(line.text)
+            Text(highlightedText)
                 .font(ChungHwa.Typography.mono(11))
                 .foregroundStyle(ChungHwa.Palette.text)
                 .textSelection(.enabled)
@@ -185,6 +253,20 @@ private struct LogRow: View {
         }
         .lineSpacing(4)
         .padding(.vertical, 1)
+    }
+
+    private var highlightedText: AttributedString {
+        var attr = AttributedString(line.text)
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return attr }
+        var i = attr.startIndex
+        while i < attr.endIndex,
+              let range = attr[i...].range(of: trimmed, options: .caseInsensitive) {
+            attr[range].backgroundColor = NSColor(ChungHwa.Palette.brass.opacity(0.30))
+            attr[range].font = .system(size: 11, design: .monospaced).bold()
+            i = range.upperBound
+        }
+        return attr
     }
 
     private var levelLabel: String {
