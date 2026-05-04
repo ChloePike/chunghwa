@@ -30,7 +30,7 @@ final class KernelController {
     private var process: Process?
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
-    private var logStreamTask: Task<Void, Never>?
+    private var streamTasks: [Task<Void, Never>] = []
 
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "kernel")
     private let externalControllerPort = 47913
@@ -38,13 +38,18 @@ final class KernelController {
     private let resolver: KernelBinaryResolver
     private let logStore: LogStore
     private let profileStore: ProfileStore
+    private let trafficStore: TrafficStore
     private let dataDir: URL
     private let configFile: URL
 
-    init(resolver: KernelBinaryResolver, logStore: LogStore, profileStore: ProfileStore) {
+    init(resolver: KernelBinaryResolver,
+         logStore: LogStore,
+         profileStore: ProfileStore,
+         trafficStore: TrafficStore) {
         self.resolver = resolver
         self.logStore = logStore
         self.profileStore = profileStore
+        self.trafficStore = trafficStore
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.dataDir = appSupport
@@ -107,7 +112,7 @@ final class KernelController {
             let version = try await waitForReady(client: client, timeout: 8)
             status = .running(version: version)
             log.info("mihomo ready version=\(version, privacy: .public)")
-            startLogStream(stream)
+            startStreams(stream)
         } catch {
             log.error("kernel start failed: \(String(describing: error), privacy: .public)")
             cleanupProcess()
@@ -214,14 +219,23 @@ final class KernelController {
         streamClient = nil
         activeBinary = nil
         runtimeSecret = nil
-        logStreamTask?.cancel()
-        logStreamTask = nil
+        for task in streamTasks { task.cancel() }
+        streamTasks = []
+        trafficStore.reset()
     }
 
-    private func startLogStream(_ stream: MihomoStreamClient) {
-        logStreamTask?.cancel()
+    private func startStreams(_ stream: MihomoStreamClient) {
+        for task in streamTasks { task.cancel() }
+        streamTasks = [
+            startLogStream(stream),
+            startTrafficStream(stream),
+            startMemoryStream(stream),
+        ]
+    }
+
+    private func startLogStream(_ stream: MihomoStreamClient) -> Task<Void, Never> {
         let store = self.logStore
-        logStreamTask = Task {
+        return Task {
             for await event in await stream.logEvents(level: "debug") {
                 let mapped: LogStream = switch event.type.lowercased() {
                 case "warning": .warning
@@ -230,6 +244,24 @@ final class KernelController {
                 default:        .info
                 }
                 store.append(event.payload, stream: mapped)
+            }
+        }
+    }
+
+    private func startTrafficStream(_ stream: MihomoStreamClient) -> Task<Void, Never> {
+        let store = self.trafficStore
+        return Task {
+            for await sample in await stream.trafficEvents() {
+                store.append(sample)
+            }
+        }
+    }
+
+    private func startMemoryStream(_ stream: MihomoStreamClient) -> Task<Void, Never> {
+        let store = self.trafficStore
+        return Task {
+            for await sample in await stream.memoryEvents() {
+                store.update(memory: sample)
             }
         }
     }

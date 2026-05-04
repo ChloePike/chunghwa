@@ -32,6 +32,14 @@ actor MihomoStreamClient {
         events(path: "/logs", query: [URLQueryItem(name: "level", value: level)])
     }
 
+    func trafficEvents() -> AsyncStream<MihomoTrafficSample> {
+        events(path: "/traffic")
+    }
+
+    func memoryEvents() -> AsyncStream<MihomoMemorySample> {
+        events(path: "/memory")
+    }
+
     private func events<E: Decodable & Sendable>(
         path: String,
         query: [URLQueryItem] = []
