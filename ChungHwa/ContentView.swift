@@ -84,6 +84,10 @@ struct ContentView: View {
             errorBus.error(source: "Rule", message: m)
             notifications.post(source: "Rule", level: .error, message: m)
         }
+        .onChange(of: profileStore.lastError) { _, m in
+            errorBus.error(source: "Profile", message: m)
+            notifications.post(source: "Profile", level: .error, message: m)
+        }
         .onChange(of: configStore.mode) { old, new in
             guard let old, let new, old != new else { return }
             let msg = "Mode → \(new.displayName)"

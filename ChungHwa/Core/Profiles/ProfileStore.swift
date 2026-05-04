@@ -35,6 +35,11 @@ final class ProfileStore {
     private(set) var profiles: [Profile] = []
     private(set) var activeProfileID: UUID?
     private(set) var storageMode: StorageMode = .appSupport
+    /// Last user-visible error from `addFile` / `addURL` / `refresh`. Surfaced
+    /// in the global error banner via the same .onChange wiring as the other
+    /// stores, so a 401 / network failure / non-yaml response doesn't
+    /// disappear silently.
+    private(set) var lastError: String?
 
     // MARK: - auto-refresh
 
@@ -133,39 +138,70 @@ final class ProfileStore {
 
     @discardableResult
     func addFile(at url: URL, name: String? = nil) throws -> Profile {
-        let data: Data
         do {
-            data = try Data(contentsOf: url)
+            let data: Data
+            do { data = try Data(contentsOf: url) }
+            catch { throw ProfileError.readFailed("\(error)") }
+            try assertLooksLikeYAML(data, source: url.path)
+            let profile = Profile(
+                id: UUID(),
+                name: name ?? url.deletingPathExtension().lastPathComponent,
+                source: .file,
+                importedAt: Date(),
+                updatedAt: Date()
+            )
+            try writeYaml(data, for: profile.id)
+            profiles.append(profile)
+            try save()
+            lastError = nil
+            return profile
         } catch {
-            throw ProfileError.readFailed("\(error)")
+            lastError = "Import failed: \(error)"
+            log.error("addFile \(url.path, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            throw error
         }
-        let profile = Profile(
-            id: UUID(),
-            name: name ?? url.deletingPathExtension().lastPathComponent,
-            source: .file,
-            importedAt: Date(),
-            updatedAt: Date()
-        )
-        try writeYaml(data, for: profile.id)
-        profiles.append(profile)
-        try save()
-        return profile
     }
 
     @discardableResult
     func addURL(_ url: URL, name: String? = nil) async throws -> Profile {
-        let data = try await fetch(url)
-        let profile = Profile(
-            id: UUID(),
-            name: name ?? url.host.map { "Sub @ \($0)" } ?? "Subscription",
-            source: .url(url),
-            importedAt: Date(),
-            updatedAt: Date()
-        )
-        try writeYaml(data, for: profile.id)
-        profiles.append(profile)
-        try save()
-        return profile
+        do {
+            let data = try await fetch(url)
+            try assertLooksLikeYAML(data, source: url.absoluteString)
+            let profile = Profile(
+                id: UUID(),
+                name: name ?? url.host.map { "Sub @ \($0)" } ?? "Subscription",
+                source: .url(url),
+                importedAt: Date(),
+                updatedAt: Date()
+            )
+            try writeYaml(data, for: profile.id)
+            profiles.append(profile)
+            try save()
+            lastError = nil
+            return profile
+        } catch {
+            lastError = "Add URL failed: \(error)"
+            log.error("addURL \(url.absoluteString, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            throw error
+        }
+    }
+
+    /// Reject obviously-not-yaml payloads (e.g. an HTML auth page returned
+    /// behind a 200) so we never write them to disk and feed the kernel.
+    private func assertLooksLikeYAML(_ data: Data, source: String) throws {
+        // First non-whitespace byte. HTML / login walls almost always start
+        // with `<` (`<!doctype …>` or `<html …>`), JSON with `{` / `[`.
+        // Real clash/mihomo yaml starts with a comment, a key, or a hyphen.
+        guard let first = data.first(where: { c in
+            !(c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D)
+        }) else {
+            throw ProfileError.downloadFailed("empty body")
+        }
+        if first == 0x3C { // '<'
+            throw ProfileError.downloadFailed(
+                "got HTML — subscription URL probably needs auth or returned an error page"
+            )
+        }
     }
 
     func setYaml(_ content: String, for id: UUID) throws {

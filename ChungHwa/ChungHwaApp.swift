@@ -113,17 +113,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hide = UserDefaults.standard.bool(forKey: "ChungHwa.HideDockIcon")
         NSApp.setActivationPolicy(hide ? .accessory : .regular)
 
-        // SwiftUI's `.windowStyle(.hiddenTitleBar)` alone leaves the
-        // NavigationSplitView toolbar row at the top — visible as a chunky
-        // empty stripe above the sidebar / detail. Patch each window to
-        // also remove the toolbar and let content extend through the
-        // title-bar safe area.
+        // Match ClashMac-style window chrome: title bar transparent +
+        // .fullSizeContentView so our content extends behind the (still
+        // present) title bar, traffic lights overlay the sidebar's top.
+        // Keep `window.toolbar` intact — that's what preserves the
+        // window's top-corner mask. Removing the toolbar entirely makes
+        // the corners go square.
         DispatchQueue.main.async {
             for window in NSApp.windows {
                 window.titlebarAppearsTransparent = true
                 window.titleVisibility = .hidden
                 window.styleMask.insert(.fullSizeContentView)
-                window.toolbar = nil
                 window.isMovableByWindowBackground = true
             }
         }
