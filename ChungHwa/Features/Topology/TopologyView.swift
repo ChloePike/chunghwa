@@ -20,8 +20,8 @@ struct TopologyView: View {
             if kernel.apiClient == nil {
                 emptyState(
                     symbol: "powerplug",
-                    title: "Kernel is not running",
-                    subtitle: "Start the kernel from Overview to see the active topology."
+                    title: "内核未运行",
+                    subtitle: "在「概览」中启动内核以查看活跃拓扑。"
                 )
             } else if store.groups.isEmpty && store.isRefreshing {
                 ProgressView().controlSize(.large)
@@ -29,8 +29,14 @@ struct TopologyView: View {
             } else if store.groups.isEmpty {
                 emptyState(
                     symbol: "point.3.connected.trianglepath.dotted",
-                    title: "No proxy groups",
-                    subtitle: "Topology renders once your active profile defines `proxy-groups`."
+                    title: "暂无代理组",
+                    subtitle: "当前配置文件定义 `proxy-groups` 后将渲染拓扑。"
+                )
+            } else if connectionsStore.connections.isEmpty {
+                emptyState(
+                    symbol: "point.3.connected.trianglepath.dotted",
+                    title: "暂无活跃连接",
+                    subtitle: "打开浏览器或启动应用产生流量后会显示拓扑。"
                 )
             } else {
                 content
@@ -87,7 +93,7 @@ struct TopologyView: View {
                 header(model: model, activity: activity)
                 TopologyDiagram(model: model)
                     .padding(.bottom, 4)
-                Text("Path width and color reflect live connection counts")
+                Text("路径粗细和颜色对应活跃连接数")
                     .font(.system(size: 10))
                     .foregroundStyle(ChungHwa.Palette.faint)
                     .padding(.bottom, 8)
@@ -100,11 +106,11 @@ struct TopologyView: View {
     private func header(model: TopologyModel, activity: TopologyActivity) -> some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Active Topology")
+                Text("活跃拓扑")
                     .font(ChungHwa.Typography.serif(22, weight: .medium))
                     .foregroundStyle(ChungHwa.Palette.text)
                     .tracking(-0.3)
-                Text("\(model.groups.count) groups · \(model.upstreams.count) upstreams · \(activity.totalConnections) live connections")
+                Text("\(model.groups.count) 组 · \(model.upstreams.count) 上游 · \(activity.totalConnections) 个活跃连接")
                     .font(.system(size: 12))
                     .foregroundStyle(ChungHwa.Palette.dim)
             }
@@ -126,7 +132,7 @@ struct TopologyView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11, weight: .semibold))
                 }
-                Text(store.isRefreshing ? "Refreshing" : "Refresh")
+                Text(store.isRefreshing ? "刷新中" : "刷新")
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(ChungHwa.Palette.text)
@@ -222,14 +228,28 @@ private struct TopologyModel {
     static let minDiagramWidth: CGFloat = 720
 
     init(groups: [MihomoProxy], store: ProxyStore, activity: TopologyActivity) {
-        self.groups = groups
+        // Filter groups down to those that currently carry traffic. The
+        // outer view only renders this branch when at least one connection
+        // exists, so this drops the noise of idle groups from the diagram.
+        let filteredGroups = groups.filter { activity.group($0.name) > 0 }
+        self.groups = filteredGroups
 
-        // Build the right column: each upstream a group points at, in
-        // first-seen order.
+        // Build the right column: each upstream a filtered group points at,
+        // in first-seen order. We also drop upstreams whose activity is 0
+        // (defensive — usually a routed group implies a hot upstream, but
+        // the connections-store snapshot can lag), while still keeping
+        // the column populated for any filtered group whose `now` is the
+        // only path we have.
         var seen = Set<String>()
         var ups: [String] = []
-        for g in groups {
-            if let now = g.now, !now.isEmpty, seen.insert(now).inserted {
+        for g in filteredGroups {
+            guard let now = g.now, !now.isEmpty else { continue }
+            // Keep an upstream if it has activity, OR if the group routing
+            // to it has activity (so the link still has a target column).
+            let upActive = activity.upstream(now) > 0
+            let groupActive = activity.group(g.name) > 0
+            guard upActive || groupActive else { continue }
+            if seen.insert(now).inserted {
                 ups.append(now)
             }
         }
@@ -237,7 +257,7 @@ private struct TopologyModel {
 
         // Layout — three columns. Row count is max(groups, upstreams, 1)
         // so the diagram is tall enough for whichever side is longest.
-        let rowCount = max(groups.count, ups.count, 1)
+        let rowCount = max(filteredGroups.count, ups.count, 1)
         let totalRowsHeight = CGFloat(rowCount) * Self.cardHeight
             + CGFloat(max(rowCount - 1, 0)) * Self.rowGap
         let height = totalRowsHeight + Self.topPadding * 2
@@ -267,7 +287,7 @@ private struct TopologyModel {
             }
         }
 
-        let groupYs = ys(count: groups.count)
+        let groupYs = ys(count: filteredGroups.count)
         let upstreamYs = ys(count: ups.count)
 
         // Root node — single GLOBAL card vertically centred.
@@ -275,8 +295,8 @@ private struct TopologyModel {
         let rootNode = Node(
             id: "GLOBAL",
             kind: .root,
-            title: "GLOBAL",
-            subtitle: "Mode: Rule",
+            title: "全局",
+            subtitle: "模式：规则",
             lastDelay: nil,
             position: rootPos,
             isActive: true,
@@ -288,7 +308,7 @@ private struct TopologyModel {
 
         // Group column.
         var groupCenters: [String: CGPoint] = [:]
-        for (i, g) in groups.enumerated() {
+        for (i, g) in filteredGroups.enumerated() {
             let pos = CGPoint(x: colXs[1], y: groupYs[i])
             groupCenters[g.name] = pos
             let isActive = (g.now != nil)
@@ -333,8 +353,10 @@ private struct TopologyModel {
 
         // group → upstream. We approximate per-link traffic by min(group,
         // upstream) — the connections-store doesn't expose per-edge counts,
-        // so this avoids over-stating either node's load.
-        for g in groups {
+        // so this avoids over-stating either node's load. The guard also
+        // ensures we only draw an edge when both endpoints survived the
+        // activity filter above.
+        for g in filteredGroups {
             guard let now = g.now,
                   let from = groupCenters[g.name],
                   let to = upstreamCenters[now] else { continue }
@@ -424,9 +446,9 @@ private struct TopologyDiagram: View {
             if acc[n.kind] == nil { acc[n.kind] = n.position.x }
         }
         let labels: [(TopologyModel.Node.Kind, String)] = [
-            (.root,     "ROOT"),
-            (.group,    "GROUPS"),
-            (.upstream, "UPSTREAMS"),
+            (.root,     "根节点"),
+            (.group,    "代理组"),
+            (.upstream, "上游节点"),
         ]
         return ZStack(alignment: .topLeading) {
             ForEach(labels, id: \.0) { kind, text in
