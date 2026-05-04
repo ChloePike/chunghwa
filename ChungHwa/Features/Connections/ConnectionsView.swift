@@ -32,6 +32,10 @@ struct ConnectionsView: View {
     /// Free-text filter applied across host / process / chain / rule. Bound to
     /// the toolbar's TextField; can be focused via the global cmd-k shortcut.
     @State private var query: String = ""
+    /// Debounced mirror of `query`. The TextField updates `query` immediately
+    /// for responsive typing, but the (potentially N×M) filter predicate only
+    /// recomputes ~150ms after the user pauses — keeping a 500-row list snappy.
+    @State private var debouncedQuery: String = ""
     @FocusState private var filterFocused: Bool
 
     /// Whether the row list is the current first responder. When true, arrow
@@ -59,6 +63,16 @@ struct ConnectionsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .chungHwaFocusFilter)) { _ in
             filterFocused = true
         }
+        // Debounce filter typing: only re-run the predicate ~150ms after the
+        // last keystroke. Cancellation on `query` change is automatic via
+        // `.task(id:)` — SwiftUI tears the previous Task down before starting
+        // the next one.
+        .task(id: query) {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            if !Task.isCancelled {
+                debouncedQuery = query
+            }
+        }
     }
 
     /// String fingerprint used as `onChange` trigger so we don't require
@@ -75,9 +89,16 @@ struct ConnectionsView: View {
 
     /// Rows the UI is currently rendering — the live store (or frozen
     /// snapshot if paused), filtered by the toolbar's free-text query.
+    ///
+    /// We deliberately hand `store.connections` straight through (no extra
+    /// copy) when not paused, since the array is already a value-typed
+    /// snapshot held by the store. The `q` string is lowercased once outside
+    /// the predicate closure rather than once per row.
     private var rows: [MihomoConnection] {
         let base = frozen ?? store.connections
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let q = debouncedQuery
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
         guard !q.isEmpty else { return base }
         return base.filter { conn in
             if conn.destination.lowercased().contains(q) { return true }
@@ -263,30 +284,30 @@ struct ConnectionsView: View {
     }
 
     private var rowList: some View {
-        ScrollView(.vertical, showsIndicators: true) {
+        // Cache the visible array once per body rather than re-reading the
+        // computed property six times below. With LazyVStack iterating, the
+        // ForEach only materialises the on-screen window; the cached array is
+        // just a thin Swift COW reference.
+        let visible = rows
+        let anonEnabled = anon.enabled
+        let currentSelection = selectedID
+
+        return ScrollView(.vertical, showsIndicators: true) {
             LazyVStack(spacing: 0) {
-                ForEach(rows) { row in
-                    ConnectionRowView(row: row, anon: anon.enabled)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            row.id == selectedID
-                            ? ChungHwa.Palette.brass.opacity(0.10)
-                            : Color.clear
-                        )
-                        .overlay(alignment: .top) {
-                            Rectangle()
-                                .fill(ChungHwa.Palette.lineSoft)
-                                .frame(height: 0.5)
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                ForEach(visible) { row in
+                    ConnectionRow(
+                        row: row,
+                        anonEnabled: anonEnabled,
+                        isSelected: row.id == currentSelection,
+                        onTap: {
                             select(row)
                             listFocused = true
+                        },
+                        contextMenu: {
+                            AnyView(rowContextMenu(for: [row.id]))
                         }
-                        .contextMenu {
-                            rowContextMenu(for: [row.id])
-                        }
+                    )
+                    .equatable()
                 }
             }
         }
@@ -479,9 +500,29 @@ struct ConnectionsView: View {
 
 // MARK: - Row
 
-private struct ConnectionRowView: View {
+/// One row of the connections list. Marked `Equatable` so a parent
+/// `.equatable()` modifier can short-circuit re-rendering when nothing the row
+/// actually displays has changed — the connection list ticks at ~1Hz with a
+/// hundred+ rows, so skipping equal rows materially cuts the per-tick cost.
+///
+/// We compare only the fields that visibly change once a connection exists:
+/// id (cheap stability check), upload/download counters, the selection flag,
+/// and anon mode. `metadata`, `rule`, `chains` etc. are immutable for the life
+/// of a connection so we don't bother diffing them.
+private struct ConnectionRow: View, Equatable {
     let row: MihomoConnection
-    let anon: Bool
+    let anonEnabled: Bool
+    let isSelected: Bool
+    let onTap: () -> Void
+    let contextMenu: () -> AnyView
+
+    static func == (lhs: ConnectionRow, rhs: ConnectionRow) -> Bool {
+        lhs.row.id == rhs.row.id
+            && lhs.row.upload == rhs.row.upload
+            && lhs.row.download == rhs.row.download
+            && lhs.isSelected == rhs.isSelected
+            && lhs.anonEnabled == rhs.anonEnabled
+    }
 
     var body: some View {
         ConnectionsGridRow(
@@ -497,7 +538,7 @@ private struct ConnectionRowView: View {
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .help(hostText)
-                    .anonMask(anon)
+                    .anonMask(anonEnabled)
             },
             process: {
                 Text(processText)
@@ -506,7 +547,7 @@ private struct ConnectionRowView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .anonMask(anon)
+                    .anonMask(anonEnabled)
             },
             down: {
                 Text(ChFormat.bytes(row.download))
@@ -533,6 +574,21 @@ private struct ConnectionRowView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(
+            isSelected
+            ? ChungHwa.Palette.brass.opacity(0.10)
+            : Color.clear
+        )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(ChungHwa.Palette.lineSoft)
+                .frame(height: 0.5)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+        .contextMenu { contextMenu() }
     }
 
     private var hostText: String { row.destination }
@@ -598,9 +654,12 @@ private struct ConnectionInspector: View {
     let dismiss: () -> Void
 
     /// 1Hz tick that drives the elapsed-time counter without re-rendering on
-    /// the global store cadence.
+    /// the global store cadence. We hold the publisher in `@State` rather than
+    /// a `let` so we can explicitly `.upstream.connect().cancel()` in
+    /// `onDisappear` — the inspector is only rendered when a row is selected,
+    /// so closing the panel must stop the tick to avoid a leaked subscription.
     @State private var now: Date = .init()
-    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @State private var tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ChCardWithHeader(
@@ -658,6 +717,11 @@ private struct ConnectionInspector: View {
             }
         }
         .onReceive(tick) { now = $0 }
+        .onDisappear {
+            // Stop the 1Hz timer when the inspector closes so we don't leave
+            // a publisher firing for a view that's no longer on screen.
+            tick.upstream.connect().cancel()
+        }
     }
 
     // MARK: blocks
