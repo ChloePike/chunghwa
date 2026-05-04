@@ -16,7 +16,7 @@ final class BannerErrorBus {
 }
 
 struct ContentView: View {
-    @State private var selection: SidebarTab? = .overview
+    @AppStorage("ChungHwa.LastSidebarTab") private var selectionRaw: String = SidebarTab.overview.rawValue
     @State private var errorBus = BannerErrorBus()
 
     @Environment(ConfigStore.self) private var configStore
@@ -29,20 +29,29 @@ struct ContentView: View {
 
     @AppStorage("ChungHwa.OnboardingDismissed") private var onboardingDismissed: Bool = false
 
+    private var selection: Binding<SidebarTab?> {
+        Binding(
+            get: { SidebarTab(rawValue: selectionRaw) ?? .overview },
+            set: { selectionRaw = $0?.rawValue ?? SidebarTab.overview.rawValue }
+        )
+    }
+
+    private var currentTab: SidebarTab { SidebarTab(rawValue: selectionRaw) ?? .overview }
+
     private var showOnboarding: Bool {
         profileStore.profiles.isEmpty && !onboardingDismissed
     }
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(selection: $selection)
+            SidebarView(selection: selection)
         } detail: {
             VStack(spacing: 0) {
-                AppToolbar(title: title, onSwitchToProfiles: { selection = .profiles })
+                AppToolbar(title: title, onSwitchToProfiles: { selectionRaw = SidebarTab.profiles.rawValue })
                 ErrorBanner(bus: errorBus)
                 if showOnboarding {
                     OnboardingBanner(
-                        onCreate: { selection = .profiles },
+                        onCreate: { selectionRaw = SidebarTab.profiles.rawValue },
                         onDismiss: { onboardingDismissed = true }
                     )
                 }
@@ -52,7 +61,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 600)
-        .focusedSceneValue(\.sidebarSelection, $selection)
+        .focusedSceneValue(\.sidebarSelection, selection)
         .focusedSceneValue(\.kernelController, kernelController)
         .focusedSceneValue(\.logStore, logStore)
         .onChange(of: configStore.lastError) { _, m in
@@ -70,12 +79,12 @@ struct ContentView: View {
     }
 
     private var title: String {
-        (selection ?? .overview).title
+        currentTab.title
     }
 
     @ViewBuilder
     private var detailScreen: some View {
-        switch selection ?? .overview {
+        switch currentTab {
         case .overview:     OverviewView()
         case .trafficStats: TrafficStatsView()
         case .connections:  ConnectionsView()
