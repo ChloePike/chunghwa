@@ -25,6 +25,7 @@ final class NetworkStatusStore {
     private(set) var ssid: String?
     private(set) var localIPv4: String?
     private(set) var proxyIPv4: String?
+    private(set) var directPublicIPv4: String?
     private(set) var lastUpdated: Date?
     private(set) var isRefreshing: Bool = false
 
@@ -66,6 +67,7 @@ final class NetworkStatusStore {
         async let dns      = measureDNS()
         async let router   = measureRouter()
         async let proxyIP  = measureProxyIP()
+        async let directIP = measureDirectPublicIP()
 
         let local = readLocalIPv4()
         let nw    = currentNetworkType()
@@ -75,11 +77,13 @@ final class NetworkStatusStore {
         let dnsVal      = await dns
         let routerVal   = await router
         let proxyVal    = await proxyIP
+        let directVal   = await directIP
 
         self.internetLatencyMs = internetVal
         self.dnsLatencyMs      = dnsVal
         self.routerLatencyMs   = routerVal
         self.proxyIPv4         = proxyVal
+        self.directPublicIPv4  = directVal
         self.localIPv4         = local
         self.networkType       = nw
         self.ssid              = ssidNow
@@ -353,6 +357,31 @@ final class NetworkStatusStore {
     /// Routes a request through mihomo's HTTP proxy and asks ipify what the
     /// far-end address looks like. nil whenever mihomo isn't up, the proxy
     /// can't egress, or the request times out.
+    /// Public IP as seen by the rest of the internet *without* going through
+    /// mihomo. Empty proxy dict bypasses both system + per-session proxies.
+    private func measureDirectPublicIP() async -> String? {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 4
+        cfg.timeoutIntervalForResource = 4
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
+        cfg.connectionProxyDictionary = [:]
+
+        let session = URLSession(configuration: cfg)
+        defer { session.invalidateAndCancel() }
+
+        guard let url = URL(string: "https://api.ipify.org") else { return nil }
+        let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 4)
+        do {
+            let (data, _) = try await session.data(for: req)
+            guard let raw = String(data: data, encoding: .utf8) else { return nil }
+            let ip = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return ip.isEmpty ? nil : ip
+        } catch {
+            log.error("direct IP probe failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     private func measureProxyIP() async -> String? {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 4

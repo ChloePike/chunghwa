@@ -3,6 +3,17 @@
 A SwiftUI desktop client that runs [mihomo](https://github.com/MetaCubeX/mihomo) as a managed
 child process and drives it through its External Controller HTTP + WebSocket API.
 
+![ChungHwa Overview](design/screenshots/overview.png)
+
+## 缘起 · Origin
+
+我喜欢 [ClashMac](https://github.com/666OS/ClashMac) 的 UI，又想要
+[Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev) 的性能。
+某个上午我的 ClashMac 崩溃了无数次后，ChungHwa 诞生了。
+
+> Built after one too many ClashMac crashes — borrowing its visual taste, but
+> aiming for Clash Verge Rev's responsiveness on a native SwiftUI stack.
+
 ## Status
 
 Self-use, in active development. Built for Apple Silicon Macs on a recent macOS
@@ -121,5 +132,21 @@ Tracked in `docs/05-roadmap.md`.
 
 ## Acknowledgements
 
-Built on top of [mihomo](https://github.com/MetaCubeX/mihomo) — all of the
-actual proxying happens there.
+- [mihomo](https://github.com/MetaCubeX/mihomo) — the actual proxy kernel.
+  Everything that's interesting about traffic routing happens there.
+- [ClashMac](https://github.com/666OS/ClashMac) — UI inspiration. Half the
+  visual decisions in this app are deliberate echoes of its menu-bar / panel
+  rhythm.
+- [Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev) —
+  the performance bar. When something here feels janky, that's the standard
+  it's failing to meet.
+
+## License
+
+GNU General Public License v3.0. See [`LICENSE`](./LICENSE) for the full text.
+
+ChungHwa is free software: you can redistribute it and/or modify it under the
+terms of the GNU GPL v3 as published by the Free Software Foundation. This
+program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE.

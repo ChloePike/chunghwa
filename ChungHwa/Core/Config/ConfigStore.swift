@@ -2,6 +2,33 @@ import Foundation
 import Observation
 import OSLog
 
+/// Snapshot of the user's persisted DNS preferences. Read by both the live
+/// kernel (PATCH /configs) and the YAML composer at boot.
+struct DNSPrefs: Equatable, Sendable {
+    var nameservers: [String]
+    var fallback: [String]
+    var hijackEnabled: Bool
+    var mode: String
+
+    /// Convert the UI mode string into mihomo's `enhanced-mode` value.
+    var enhancedMode: String {
+        switch mode {
+        case "system":  return "redir-host"
+        case "fake-ip": return "fake-ip"
+        default:        return "fake-ip"   // smart → fake-ip on the egress side
+        }
+    }
+}
+
+/// One persisted custom routing rule. `match` is a mihomo rule prefix
+/// (e.g. "DOMAIN-SUFFIX,example.com"), `target` is "DIRECT" / "REJECT" or
+/// the name of a proxy group.
+struct CustomRule: Codable, Equatable, Identifiable, Sendable {
+    var id: UUID = UUID()
+    var match: String
+    var target: String
+}
+
 /// Mirrors mihomo's `/configs` snapshot for the bits the UI cares about.
 /// Currently outbound mode + log level + LAN inbound; expand as more
 /// toolbar / settings bindings (port, …) move into the chrome.
@@ -21,15 +48,57 @@ final class ConfigStore {
     /// `ChungHwa.MixedPort` UserDefaults; `ConfigComposer`, system proxy
     /// apply, and the network probe all read from the same key.
     private(set) var mixedPort: Int
+    private(set) var dnsNameservers: [String]
+    private(set) var dnsFallback: [String]
+    private(set) var dnsHijackEnabled: Bool
+    private(set) var dnsMode: String
+    private(set) var customRules: [CustomRule]
     private(set) var lastError: String?
     private(set) var isApplyingMode: Bool = false
 
     static let tunEnabledDefaultsKey = "ChungHwa.TunEnabled"
     static let mixedPortDefaultsKey = "ChungHwa.MixedPort"
+    static let dnsNameserversKey = "ChungHwa.DNS.Nameservers"
+    static let dnsFallbackKey = "ChungHwa.DNS.Fallback"
+    static let dnsHijackKey = "ChungHwa.Advanced.DNSHijack"
+    static let dnsModeKey = "ChungHwa.Advanced.DNSMode"
+    static let customRulesKey = "ChungHwa.CustomRules"
     static let defaultMixedPort = 7890
+
+    static let defaultNameservers = [
+        "https://cloudflare-dns.com/dns-query",
+        "https://dns.google/dns-query",
+    ]
+    static let defaultFallback = [
+        "tls://1.1.1.1",
+        "tls://8.8.8.8",
+    ]
 
     static var currentMixedPort: Int {
         UserDefaults.standard.object(forKey: mixedPortDefaultsKey) as? Int ?? defaultMixedPort
+    }
+
+    /// Static accessor for the current DNS preferences. Read at YAML compose
+    /// time (no live ConfigStore in scope there) and at hot-PATCH time via
+    /// the instance helper. UserDefaults is the single source of truth.
+    static func currentDNS() -> DNSPrefs {
+        let ns = (UserDefaults.standard.array(forKey: dnsNameserversKey) as? [String])
+            ?? defaultNameservers
+        let fb = (UserDefaults.standard.array(forKey: dnsFallbackKey) as? [String])
+            ?? defaultFallback
+        let hijack: Bool = {
+            if UserDefaults.standard.object(forKey: dnsHijackKey) == nil { return true }
+            return UserDefaults.standard.bool(forKey: dnsHijackKey)
+        }()
+        let mode = (UserDefaults.standard.string(forKey: dnsModeKey)) ?? "smart"
+        return DNSPrefs(nameservers: ns, fallback: fb, hijackEnabled: hijack, mode: mode)
+    }
+
+    static func currentCustomRules() -> [CustomRule] {
+        guard let data = UserDefaults.standard.data(forKey: customRulesKey),
+              let decoded = try? JSONDecoder().decode([CustomRule].self, from: data)
+        else { return [] }
+        return decoded
     }
 
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "config")
@@ -37,6 +106,12 @@ final class ConfigStore {
     init() {
         self.tunEnabled = UserDefaults.standard.bool(forKey: Self.tunEnabledDefaultsKey)
         self.mixedPort = Self.currentMixedPort
+        let prefs = Self.currentDNS()
+        self.dnsNameservers = prefs.nameservers
+        self.dnsFallback = prefs.fallback
+        self.dnsHijackEnabled = prefs.hijackEnabled
+        self.dnsMode = prefs.mode
+        self.customRules = Self.currentCustomRules()
     }
 
     func reset() {
@@ -180,6 +255,63 @@ final class ConfigStore {
             tcpConcurrent = previous
             lastError = String(describing: error)
             log.error("set tcp-concurrent \(enabled, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
+        }
+    }
+
+    /// Persist the upstream nameserver / fallback lists and (when the kernel
+    /// is up) PATCH the live `dns` block. Empties are dropped before save.
+    func setDNS(nameservers: [String], fallback: [String], api: MihomoAPIClient?) async {
+        let cleanNS = nameservers
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let cleanFB = fallback
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        dnsNameservers = cleanNS
+        dnsFallback = cleanFB
+        UserDefaults.standard.set(cleanNS, forKey: Self.dnsNameserversKey)
+        UserDefaults.standard.set(cleanFB, forKey: Self.dnsFallbackKey)
+        await pushDNS(api: api)
+    }
+
+    /// Persist the DNS mode. Mirrors `ChungHwa.Advanced.DNSMode` AppStorage.
+    func setDNSMode(_ mode: String, api: MihomoAPIClient?) async {
+        dnsMode = mode
+        UserDefaults.standard.set(mode, forKey: Self.dnsModeKey)
+        await pushDNS(api: api)
+    }
+
+    /// Persist the DNS hijack toggle.
+    func setDNSHijack(_ enabled: Bool, api: MihomoAPIClient?) async {
+        dnsHijackEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.dnsHijackKey)
+        await pushDNS(api: api)
+    }
+
+    private func pushDNS(api: MihomoAPIClient?) async {
+        guard let api else { return }
+        let prefs = DNSPrefs(
+            nameservers: dnsNameservers,
+            fallback: dnsFallback,
+            hijackEnabled: dnsHijackEnabled,
+            mode: dnsMode
+        )
+        do {
+            try await api.setDNS(prefs)
+            lastError = nil
+        } catch {
+            lastError = String(describing: error)
+            log.error("set dns failed: \(self.lastError ?? "?", privacy: .public)")
+        }
+    }
+
+    /// Persist the custom rule list. Effective only when the active profile
+    /// is the default (no user yaml) — see ConfigComposer for the rationale.
+    /// A kernel restart is required to take effect.
+    func setCustomRules(_ rules: [CustomRule]) {
+        customRules = rules
+        if let data = try? JSONEncoder().encode(rules) {
+            UserDefaults.standard.set(data, forKey: Self.customRulesKey)
         }
     }
 }

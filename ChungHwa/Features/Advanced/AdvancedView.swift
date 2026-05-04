@@ -41,12 +41,17 @@ struct AdvancedView: View {
     @State private var bypass: [BypassEntry] = AdvancedView.loadBypass()
     @State private var newIp: String = ""
 
+    // ── Sheet presentation state ──────────────────────────────────────
+    @State private var showDNSEditor: Bool = false
+    @State private var showRoutingEditor: Bool = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 kernelLogs
                 connectionOptimization
                 dns
+                routing
                 lanInbound
                 proxyAuth
                 bypassList
@@ -71,6 +76,20 @@ struct AdvancedView: View {
         }
         .onChange(of: tcpConcurrent) { _, newValue in
             Task { await config.setTCPConcurrent(newValue, api: kernel.apiClient) }
+        }
+        .onChange(of: dnsMode) { _, newValue in
+            Task { await config.setDNSMode(newValue, api: kernel.apiClient) }
+        }
+        .onChange(of: dnsHijack) { _, newValue in
+            Task { await config.setDNSHijack(newValue, api: kernel.apiClient) }
+        }
+        .sheet(isPresented: $showDNSEditor) {
+            DNSEditorSheet()
+                .environment(kernel)
+                .environment(config)
+        }
+        .sheet(isPresented: $showRoutingEditor) {
+            RoutingEditor()
         }
     }
 
@@ -159,13 +178,81 @@ struct AdvancedView: View {
                    label: "上游解析器",
                    sub: "每行一条；支持 DoH、DoT、DoQ",
                    last: true) {
-                Text("4 个生效")
+                Text(upstreamSummary)
                     .font(ChungHwa.Typography.mono(11))
                     .foregroundStyle(ChungHwa.Palette.dim)
-                IconButton(systemName: "chevron.right") { /* no-op */ }
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Button {
+                    showDNSEditor = true
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ChungHwa.Palette.dim)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            FootnoteRow(text: "本地保存 —— 重启 mihomo 生效")
+            FootnoteRow(text: "保存即时下发到 mihomo · 也写入下次启动的 YAML")
         }
+    }
+
+    private var routing: some View {
+        AdvSection(title: "我的路由") {
+            AdvRow(icon: "list.bullet.rectangle",
+                   iconColor: ChungHwa.Palette.brass,
+                   label: "自定义规则",
+                   sub: routingSummary,
+                   last: true) {
+                Button {
+                    showRoutingEditor = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("查看 / 编辑")
+                            .font(.system(size: 11, weight: .semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(ChungHwa.Palette.brass)
+                    .padding(.horizontal, 10)
+                    .frame(height: 22)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(ChungHwa.Palette.brass.opacity(0.12))
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            FootnoteRow(text: "仅在使用默认配置时生效；订阅 YAML 请直接编辑源文件")
+        }
+    }
+
+    private var upstreamSummary: String {
+        let count = config.dnsNameservers.count
+        guard count > 0 else { return "0 个" }
+        let first = config.dnsNameservers.first ?? ""
+        let host = Self.hostFragment(of: first)
+        return "\(count) 个 · \(host)"
+    }
+
+    private var routingSummary: String {
+        let n = config.customRules.count
+        if n == 0 { return "尚未添加规则" }
+        return "\(n) 条规则"
+    }
+
+    /// Pull a short host-ish fragment out of a resolver string for the row
+    /// summary. For URLs we want the host; for raw IPs we want the IP itself.
+    private static func hostFragment(of value: String) -> String {
+        if let url = URL(string: value), let host = url.host, !host.isEmpty {
+            return host
+        }
+        if let scheme = value.range(of: "://") {
+            return String(value[scheme.upperBound...])
+        }
+        return value
     }
 
     private var lanInbound: some View {

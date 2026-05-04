@@ -8,9 +8,10 @@ import Foundation
 /// duplicate keys and refuses to load when both are present.
 enum ConfigComposer {
     static func compose(userYaml: String?, externalControllerHostPort: String, secret: String) -> String {
+        let usingDefault = (userYaml == nil)
         let bodyRaw = userYaml ?? defaultBody
-        // First strip block-style keys (tun + its children), then inline keys.
-        let withoutBlocks = stripTopLevelBlocks(bodyRaw, keys: ["tun"])
+        // First strip block-style keys (tun + dns + its children), then inline keys.
+        let withoutBlocks = stripTopLevelBlocks(bodyRaw, keys: ["tun", "dns"])
         // Strip user's port keys so our override wins. mihomo refuses
         // duplicate top-level keys, and we keep the inbound port in app
         // state, not the user yaml.
@@ -21,8 +22,11 @@ enum ConfigComposer {
         let body = trimmedTrailing(stripped)
         let tunEnabled = UserDefaults.standard.bool(forKey: ConfigStore.tunEnabledDefaultsKey)
         let mixedPort = ConfigStore.currentMixedPort
+        let dns = ConfigStore.currentDNS()
+        let dnsBlock = renderDNSBlock(dns)
+        let rulesBlock = renderRulesBlockIfNeeded(usingDefault: usingDefault)
         return """
-        \(body)
+        \(body)\(rulesBlock)
 
         # === ChungHwa overrides — managed by the app, do not edit ===
         mixed-port: \(mixedPort)
@@ -35,7 +39,61 @@ enum ConfigComposer {
           auto-detect-interface: true
           dns-hijack:
             - any:53
+        \(dnsBlock)
         """
+    }
+
+    private static func renderDNSBlock(_ prefs: DNSPrefs) -> String {
+        var lines: [String] = ["dns:", "  enable: true"]
+        if prefs.hijackEnabled {
+            lines.append("  listen: 0.0.0.0:53")
+        }
+        lines.append("  enhanced-mode: \(prefs.enhancedMode)")
+        lines.append("  fake-ip-range: 198.18.0.1/16")
+        lines.append("  nameserver:")
+        let ns = prefs.nameservers.isEmpty ? ConfigStore.defaultNameservers : prefs.nameservers
+        for entry in ns {
+            lines.append("    - \(yamlScalar(entry))")
+        }
+        lines.append("  fallback:")
+        let fb = prefs.fallback.isEmpty ? ConfigStore.defaultFallback : prefs.fallback
+        for entry in fb {
+            lines.append("    - \(yamlScalar(entry))")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// When the user is on the default profile (no source yaml), inject the
+    /// persisted custom rules as the entire `rules:` block. We deliberately
+    /// don't try to merge with a user-supplied yaml — the simplest behavior
+    /// that does the right thing: custom rules apply on the default profile,
+    /// users who bring their own yaml manage their rules in that yaml.
+    private static func renderRulesBlockIfNeeded(usingDefault: Bool) -> String {
+        guard usingDefault else { return "" }
+        let rules = ConfigStore.currentCustomRules()
+        guard !rules.isEmpty else {
+            return "\nrules:\n  - MATCH,DIRECT"
+        }
+        var lines: [String] = ["", "rules:"]
+        for r in rules {
+            let match = r.match.trimmingCharacters(in: .whitespaces)
+            let target = r.target.trimmingCharacters(in: .whitespaces)
+            guard !match.isEmpty, !target.isEmpty else { continue }
+            lines.append("  - \(match),\(target)")
+        }
+        // Always end with a catch-all so traffic without a matching custom
+        // rule still has a defined disposition.
+        lines.append("  - MATCH,DIRECT")
+        return lines.joined(separator: "\n")
+    }
+
+    private static func yamlScalar(_ s: String) -> String {
+        // Quote anything containing characters that YAML treats specially in
+        // a plain scalar. Most resolver URLs fit the plain form, but tls://
+        // and similar schemes are clean too — we just quote everything to
+        // be safe and to keep the composed output unambiguous.
+        let escaped = s.replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
     }
 
     /// Remove every top-level (zero-indent) line that defines one of the

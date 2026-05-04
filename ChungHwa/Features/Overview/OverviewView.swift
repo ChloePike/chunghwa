@@ -466,6 +466,7 @@ private struct ProxyGroupRow: View {
 
 private struct NetworkCard: View {
     @Environment(NetworkStatusStore.self) private var net
+    @Environment(GeoIPStore.self) private var geo
     @Environment(AnonymousMode.self) private var anon
 
     var body: some View {
@@ -499,18 +500,54 @@ private struct NetworkCard: View {
                 .frame(height: statTopRowHeight)
 
                 HStack(alignment: .top, spacing: 12) {
-                    ChSubStat("出口 IP", systemImage: "cloud") {
-                        Text(net.proxyIPv4 ?? "—").anonMask(anon.enabled)
+                    ChSubStat("直连 IP", systemImage: "desktopcomputer") {
+                        ipWithFlag(net.directPublicIPv4)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    ChSubStat("本地 IP", systemImage: "desktopcomputer") {
-                        Text(net.localIPv4 ?? "—").anonMask(anon.enabled)
+                    ChSubStat("代理 IP", systemImage: "cloud") {
+                        ipWithFlag(net.proxyIPv4)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(height: statBottomRowHeight)
             }
+            .task(id: ipPair) {
+                let ips: Set<String> = Set([net.directPublicIPv4, net.proxyIPv4]
+                    .compactMap { $0 }
+                    .filter { !$0.isEmpty })
+                guard !ips.isEmpty else { return }
+                geo.resolve(ips: ips)
+            }
         }
+    }
+
+    private var ipPair: String {
+        "\(net.directPublicIPv4 ?? "")|\(net.proxyIPv4 ?? "")"
+    }
+
+    @ViewBuilder
+    private func ipWithFlag(_ ip: String?) -> some View {
+        if let ip, !ip.isEmpty {
+            HStack(spacing: 5) {
+                Text(ip).anonMask(anon.enabled)
+                if let code = geo.country(for: ip),
+                   let flag = flagOrTag(code) {
+                    Text(flag)
+                        .font(.system(size: 12))
+                }
+            }
+        } else {
+            Text("—")
+        }
+    }
+
+    /// `country(for:)` returns either a 2-letter ISO code, the literal `LAN`
+    /// sentinel for private addresses, or nil for misses. We render flag emoji
+    /// for ISO codes and a house glyph for LAN.
+    private func flagOrTag(_ code: String) -> String? {
+        if code == "LAN" { return "🏠" }
+        let flag = GeoIPStore.flagEmoji(iso: code)
+        return flag.isEmpty ? nil : flag
     }
 
     private func latencyBlock(_ label: String, ms: Int?, symbol: String) -> some View {

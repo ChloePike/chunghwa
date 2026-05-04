@@ -57,6 +57,39 @@ private nonisolated struct PatchTunBody: Encodable, Sendable {
     let tun: Tun
 }
 
+/// Body for `PATCH /configs` carrying the nested `dns` block. Like the TUN
+/// patch, mihomo accepts a partial nested object and merges into the running
+/// config, but to avoid leaving half-configured DNS we always send the full
+/// shape.
+private nonisolated struct PatchDNSBody: Encodable, Sendable {
+    struct DNS: Encodable, Sendable {
+        let enable: Bool
+        let listen: String?
+        let enhancedMode: String
+        let fakeIPRange: String
+        let nameserver: [String]
+        let fallback: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case enable, listen
+            case enhancedMode = "enhanced-mode"
+            case fakeIPRange = "fake-ip-range"
+            case nameserver, fallback
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(enable, forKey: .enable)
+            try c.encodeIfPresent(listen, forKey: .listen)
+            try c.encode(enhancedMode, forKey: .enhancedMode)
+            try c.encode(fakeIPRange, forKey: .fakeIPRange)
+            try c.encode(nameserver, forKey: .nameserver)
+            try c.encode(fallback, forKey: .fallback)
+        }
+    }
+    let dns: DNS
+}
+
 private nonisolated struct PatchConfigBody: Encodable, Sendable {
     var mode: String?
     var logLevel: String?
@@ -144,6 +177,21 @@ actor MihomoAPIClient {
     /// Toggle TCP-concurrent dialing (race multiple TCP streams to a node).
     func setTCPConcurrent(_ enabled: Bool) async throws {
         try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(tcpConcurrent: enabled))
+    }
+
+    /// Push a fresh `dns` block to the running kernel. Mirrors the TUN patch:
+    /// we send the entire nested object so the kernel never ends up with a
+    /// half-configured resolver. First-boot still needs the YAML composer.
+    func setDNS(_ prefs: DNSPrefs) async throws {
+        let body = PatchDNSBody(dns: .init(
+            enable: true,
+            listen: prefs.hijackEnabled ? "0.0.0.0:53" : nil,
+            enhancedMode: prefs.enhancedMode,
+            fakeIPRange: "198.18.0.1/16",
+            nameserver: prefs.nameservers,
+            fallback: prefs.fallback
+        ))
+        try await sendVoid("/configs", method: "PATCH", body: body)
     }
 
     /// Toggle TUN mode at runtime via a nested `tun` block PATCH. The kernel

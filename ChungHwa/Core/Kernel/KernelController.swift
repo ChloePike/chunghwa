@@ -117,7 +117,16 @@ final class KernelController {
             process.terminationHandler = { [weak self] proc in
                 let code = proc.terminationStatus
                 Task { @MainActor [weak self] in
-                    self?.handleTermination(exitCode: code)
+                    guard let self else { return }
+                    // restart() = stop()+start(): the OLD process's handler
+                    // can fire AFTER we've already spawned a new one. If the
+                    // exited process isn't `self.process`, it's a stale
+                    // handler — ignore it, otherwise we'd flip the live
+                    // kernel's status to `.failed("exited with code 15")`
+                    // and abandon the running mihomo. This race is the
+                    // "system thinks kernel is dead after TUN restart" bug.
+                    guard self.process === proc else { return }
+                    self.handleTermination(exitCode: code)
                 }
             }
 

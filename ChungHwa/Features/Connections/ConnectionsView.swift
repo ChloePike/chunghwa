@@ -309,6 +309,7 @@ struct ConnectionsView: View {
         let visible = rows
         let anonEnabled = anon.enabled
         let currentSelection = selectedID
+        let liveRates = store.rates
 
         return ScrollView(.vertical, showsIndicators: true) {
             LazyVStack(spacing: 0) {
@@ -319,6 +320,7 @@ struct ConnectionsView: View {
                         anonEnabled: anonEnabled,
                         isSelected: row.id == currentSelection,
                         country: geo.country(for: row.metadata.destinationIP ?? ""),
+                        rate: liveRates[row.id] ?? .zero,
                         onTap: {
                             select(row)
                             listFocused = true
@@ -549,6 +551,9 @@ private struct ConnectionRow: View, Equatable {
     /// ISO 3166-1 alpha-2 code (e.g. "JP", "US") or the sentinel "LAN" for
     /// private addresses. nil while the lookup is still in flight.
     let country: String?
+    /// Live bytes/second derived by `ConnectionsStore` from successive
+    /// snapshots. `.zero` for a connection's first sighting.
+    let rate: ConnectionRate
     let onTap: () -> Void
     let contextMenu: () -> AnyView
 
@@ -559,6 +564,7 @@ private struct ConnectionRow: View, Equatable {
             && lhs.isSelected == rhs.isSelected
             && lhs.anonEnabled == rhs.anonEnabled
             && lhs.country == rhs.country
+            && lhs.rate == rhs.rate
             && lhs.widths == rhs.widths
     }
 
@@ -595,21 +601,13 @@ private struct ConnectionRow: View, Equatable {
                     .anonMask(anonEnabled)
             },
             down: {
-                Text(ChFormat.bytes(row.download))
-                    .font(.system(size: 11.5))
-                    .monospacedDigit()
-                    .foregroundStyle(ChungHwa.Palette.text)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                rateCell(bps: rate.down, total: row.download)
             },
             up: {
-                Text(ChFormat.bytes(row.upload))
-                    .font(.system(size: 11.5))
-                    .monospacedDigit()
-                    .foregroundStyle(ChungHwa.Palette.text)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                rateCell(bps: rate.up, total: row.upload)
             },
             rule: {
-                Text(row.rule)
+                Text(ruleText)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(row.rule == "DIRECT"
                                      ? ChungHwa.Palette.dim
@@ -617,6 +615,7 @@ private struct ConnectionRow: View, Equatable {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .help(row.rule)
             }
         )
         .padding(.horizontal, 14)
@@ -638,6 +637,42 @@ private struct ConnectionRow: View, Equatable {
 
     private var hostText: String { row.destination }
     private var processText: String { row.metadata.process ?? "—" }
+
+    /// Display string for the rule column. mihomo emits a few wordy
+    /// constants (e.g. "DOMAIN-SUFFIX", "DOMAIN-KEYWORD") that don't fit
+    /// the 110pt column without truncation; abbreviate the ones that
+    /// have a conventional short form so the column stays glanceable.
+    private var ruleText: String {
+        switch row.rule {
+        case "DOMAIN-SUFFIX":  return "SUFFIX"
+        case "DOMAIN-KEYWORD": return "KEYWORD"
+        case "RuleSet":        return "RULESET"
+        case "":               return "—"
+        default:               return row.rule
+        }
+    }
+
+    /// Two-line trailing-aligned cell: live rate on top (bytes/sec),
+    /// cumulative bytes underneath. The rate is what the user wants for
+    /// live monitoring; the total is preserved as secondary context.
+    /// "0 B/s" renders as a subdued "·" so a quiet connection doesn't
+    /// flood the column with zeros.
+    @ViewBuilder
+    private func rateCell(bps: Int, total: Int) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            Text(bps > 0 ? ChFormat.rate(bps) : "·")
+                .font(.system(size: 11.5))
+                .monospacedDigit()
+                .foregroundStyle(bps > 0
+                                 ? ChungHwa.Palette.text
+                                 : ChungHwa.Palette.faint)
+            Text(ChFormat.bytes(total))
+                .font(.system(size: 9.5))
+                .monospacedDigit()
+                .foregroundStyle(ChungHwa.Palette.dim)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
 
     /// Single-glyph rendering for the region column. "LAN" sentinel becomes
     /// a house emoji; a real ISO code becomes the regional-indicator flag;
@@ -678,7 +713,8 @@ struct ConnectionsColumnWidths: Equatable {
     let procW: CGFloat
 
     init(totalWidth: CGFloat) {
-        let fixedSum: CGFloat = 12 + 36 + 80 + 80 + 90
+        // dot 12 · region 36 · down 86 · up 86 · rule 110
+        let fixedSum: CGFloat = 12 + 36 + 86 + 86 + 110
         let gapSum: CGFloat = 10 * 6
         // The row's own .padding(.horizontal, 14) inside its body must be
         // subtracted from the available space — same arithmetic the
@@ -713,11 +749,10 @@ private struct ConnectionsGridRow<Dot: View, Region: View, Host: View, Process: 
             region().frame(width: 36, alignment: .center)
             host().frame(width: widths.hostW, alignment: .leading)
             process().frame(width: widths.procW, alignment: .leading)
-            down().frame(width: 80, alignment: .trailing)
-            up().frame(width: 80, alignment: .trailing)
-            rule().frame(width: 90, alignment: .leading)
+            down().frame(width: 86, alignment: .trailing)
+            up().frame(width: 86, alignment: .trailing)
+            rule().frame(width: 110, alignment: .leading)
         }
-        .frame(height: 18)
     }
 }
 
