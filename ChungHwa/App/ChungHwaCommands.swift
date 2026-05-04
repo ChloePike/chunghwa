@@ -5,6 +5,10 @@ import SwiftUI
 /// Feature views with a search field listen for this to grab keyboard focus.
 extension Notification.Name {
     static let chungHwaFocusFilter = Notification.Name("ChungHwa.FocusFilter")
+    /// Posted by cards / quick-actions to drive a sidebar tab switch without
+    /// threading a binding through @Environment. The notification's `object`
+    /// is the `SidebarTab.rawValue` to navigate to.
+    static let chungHwaSwitchTab = Notification.Name("ChungHwa.SwitchTab")
 }
 
 private func openURL(_ string: String) {

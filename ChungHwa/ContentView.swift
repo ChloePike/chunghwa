@@ -72,6 +72,13 @@ struct ContentView: View {
         .onChange(of: selection) { _, new in
             selectionRaw = new?.rawValue ?? SidebarTab.overview.rawValue
         }
+        // Cards / inline buttons elsewhere drive a tab switch by posting this
+        // notification so they don't have to thread a binding through @Environment.
+        .onReceive(NotificationCenter.default.publisher(for: .chungHwaSwitchTab)) { note in
+            guard let raw = note.object as? String,
+                  let tab = SidebarTab(rawValue: raw) else { return }
+            selection = tab
+        }
         .focusedSceneValue(\.sidebarSelection, $selection)
         .focusedSceneValue(\.kernelController, kernelController)
         .focusedSceneValue(\.logStore, logStore)
