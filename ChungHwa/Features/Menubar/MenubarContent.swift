@@ -1,129 +1,627 @@
-import SwiftUI
 import AppKit
+import Charts
+import SwiftUI
 
+// MARK: - MenubarContent (rich SwiftUI popup, MenuBarExtraStyle.window)
+
+/// 中華 菜单栏弹出窗口。固定 320pt 宽，玻璃底 + 大圆角，分七组 section。
+/// 与 ClashMac 同款体验：头部状态、live 流量卡片、网络接管、出站模式、
+/// per-group 节点切换、配置切换、Dashboard / 内核 / 偏好设置。
 struct MenubarContent: View {
     @Environment(KernelController.self) private var kernel
     @Environment(SystemProxyController.self) private var systemProxy
     @Environment(ConfigStore.self) private var config
     @Environment(ProfileStore.self) private var profileStore
+    @Environment(ProxyStore.self) private var proxyStore
     @Environment(TrafficStore.self) private var traffic
     @Environment(ConnectionsStore.self) private var connectionsStore
 
     var body: some View {
-        // 1. Status header (non-selectable)
-        statusTitle
-        rateLine
+        VStack(spacing: 0) {
+            header
+            compactStats
+                .padding(.top, 8)
 
-        Divider()
+            sectionDivider.padding(.vertical, 6)
+            modeSection
+            sectionDivider.padding(.vertical, 4)
 
-        // 3. Outbound mode submenu
-        Menu("Mode: \(modeName)") {
-            modeButton(.direct)
-            modeButton(.rule)
-            modeButton(.global)
+            // Group / profile picker — wrapped in a ScrollView so a 20-group
+            // config doesn't make the popup taller than the screen.
+            ScrollView {
+                VStack(spacing: 0) {
+                    groupSection
+                    if !proxyStore.groups.isEmpty {
+                        sectionDivider.padding(.vertical, 4)
+                    }
+                    profileSection
+                }
+            }
+            .frame(maxHeight: 240)
+
+            sectionDivider.padding(.vertical, 4)
+            footerSection
         }
+        .padding(8)
+        .frame(width: 280)
+        .background(.regularMaterial,
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+        )
+        .task {
+            await proxyStore.refresh(api: kernel.apiClient)
+            await config.refresh(api: kernel.apiClient)
+        }
+    }
 
-        // 4. Profile submenu
-        Menu("Profile: \(activeProfileName)") {
+    /// Single-row live stat strip (replaces the chunky liveCard with chart).
+    /// 仅显示连接数 + ↑↓ 实时速率 + 内存，不再画 sparkline——菜单栏弹出窗
+    /// 不需要那个体量。
+    private var compactStats: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "link")
+                .font(.system(size: 10))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Text("\(connectionsStore.connections.count)")
+                .font(ChungHwa.Typography.mono(11, weight: .semibold))
+                .foregroundStyle(ChungHwa.Palette.text)
+            Text("·").foregroundStyle(ChungHwa.Palette.faint)
+            Text("↑ \(ChFormat.rate(currentUp))")
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.patina)
+            Text("↓ \(ChFormat.rate(currentDown))")
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.brass)
+            Spacer(minLength: 0)
+            Image(systemName: "memorychip")
+                .font(.system(size: 10))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Text(ChFormat.bytes(traffic.memoryInUse))
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+        }
+        .padding(.horizontal, 8)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(ChungHwa.Palette.brass.opacity(0.18))
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(ChungHwa.Palette.brass)
+            }
+            .frame(width: 40, height: 40)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(activeProfileName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                    .lineLimit(1)
+                Text(statusSubtitle)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 5) {
+                ChDot(color: statusColor, size: 7, pulse: pulses)
+                Text(statusLabel)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(statusColor)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, 4)
+    }
+
+    private var activeProfileName: String {
+        profileStore.profiles.first(where: { $0.id == profileStore.activeProfileID })?.name
+            ?? "无配置"
+    }
+
+    private var statusLabel: String {
+        switch kernel.status {
+        case .running:  return "运行中"
+        case .starting: return "启动中"
+        case .failed:   return "失败"
+        case .idle:     return "空闲"
+        }
+    }
+
+    private var statusSubtitle: String {
+        switch kernel.status {
+        case .running(let v): return "mihomo \(v)"
+        case .starting:       return "正在拉起内核"
+        case .failed(let r):  return r.isEmpty ? "内核启动失败" : r
+        case .idle:           return "内核未运行"
+        }
+    }
+
+    private var statusColor: Color {
+        switch kernel.status {
+        case .running:  return ChungHwa.Palette.patina
+        case .starting: return ChungHwa.Palette.brass
+        case .failed:   return ChungHwa.Palette.earth
+        case .idle:     return ChungHwa.Palette.dim
+        }
+    }
+
+    private var pulses: Bool {
+        switch kernel.status {
+        case .running, .starting: return true
+        default: return false
+        }
+    }
+
+    // MARK: - Live card
+
+    private var liveCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // 上行：连接 + 上行速率 + 累计 ↑
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.patina)
+                Text("\(connectionsStore.connections.count) 条连接")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                Spacer(minLength: 0)
+                Text("↑ \(ChFormat.rate(currentUp))")
+                    .font(ChungHwa.Typography.mono(11))
+                    .foregroundStyle(ChungHwa.Palette.patina)
+                Text("· \(ChFormat.bytes(traffic.totalUp))")
+                    .font(ChungHwa.Typography.mono(10.5))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+            }
+
+            // sparkline
+            sparkline.frame(height: 60)
+
+            // 下行：内存 + 下行速率 + 累计 ↓
+            HStack(spacing: 6) {
+                Image(systemName: "memorychip")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.brass)
+                Text(ChFormat.bytes(traffic.memoryInUse))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                Spacer(minLength: 0)
+                Text("↓ \(ChFormat.rate(currentDown))")
+                    .font(ChungHwa.Typography.mono(11))
+                    .foregroundStyle(ChungHwa.Palette.brass)
+                Text("· \(ChFormat.bytes(traffic.totalDown))")
+                    .font(ChungHwa.Typography.mono(10.5))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+            }
+        }
+        .padding(10)
+        .background(ChungHwa.Palette.cardSoft,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
+        )
+    }
+
+    private var currentUp: Int { traffic.current?.upBps ?? 0 }
+    private var currentDown: Int { traffic.current?.downBps ?? 0 }
+
+    private var sparkline: some View {
+        let recent = traffic.samples.suffix(60)
+        let points = Array(recent.enumerated())
+        return Chart {
+            ForEach(points, id: \.offset) { idx, s in
+                AreaMark(x: .value("i", idx),
+                         y: .value("up", s.upBps),
+                         series: .value("series", "up"))
+                    .foregroundStyle(.linearGradient(
+                        colors: [ChungHwa.Palette.patina.opacity(0.32),
+                                 ChungHwa.Palette.patina.opacity(0)],
+                        startPoint: .top, endPoint: .bottom))
+                LineMark(x: .value("i", idx),
+                         y: .value("up", s.upBps),
+                         series: .value("series", "up"))
+                    .foregroundStyle(ChungHwa.Palette.patina)
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+
+                AreaMark(x: .value("i", idx),
+                         y: .value("down", s.downBps),
+                         series: .value("series", "down"))
+                    .foregroundStyle(.linearGradient(
+                        colors: [ChungHwa.Palette.brass.opacity(0.32),
+                                 ChungHwa.Palette.brass.opacity(0)],
+                        startPoint: .top, endPoint: .bottom))
+                LineMark(x: .value("i", idx),
+                         y: .value("down", s.downBps),
+                         series: .value("series", "down"))
+                    .foregroundStyle(ChungHwa.Palette.brass)
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            }
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartLegend(.hidden)
+    }
+
+    // MARK: - Network section
+
+    private var networkSection: some View {
+        VStack(spacing: 0) {
+            Menu {
+                Button {
+                    if !systemProxy.enabled { systemProxy.toggle() }
+                } label: {
+                    Label("系统代理", systemImage: systemProxy.enabled ? "checkmark" : "")
+                }
+                Button {
+                    // TUN 切换尚未接入 — 占位提示用户
+                } label: {
+                    Label("TUN 模式（暂未接入）", systemImage: "")
+                }
+                .disabled(true)
+            } label: {
+                MenubarRowLabel(
+                    icon: systemProxy.enabled ? "network" : "network.slash",
+                    title: "网络接管",
+                    trailing: systemProxy.enabled ? "系统代理" : "未启用",
+                    showsChevron: true
+                )
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+
+            Button(action: copyProxyExports) {
+                MenubarRowLabel(
+                    icon: "doc.on.clipboard",
+                    title: "复制代理导出",
+                    trailing: "⌘C",
+                    showsChevron: false
+                )
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("c", modifiers: [.command])
+        }
+    }
+
+    private func copyProxyExports() {
+        let port = systemProxy.port
+        let socks = port // mihomo mixed-port 同时承载 SOCKS5
+        let payload = """
+        export http_proxy=http://127.0.0.1:\(port)
+        export https_proxy=http://127.0.0.1:\(port)
+        export all_proxy=socks5://127.0.0.1:\(socks)
+        """
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(payload, forType: .string)
+    }
+
+    // MARK: - Mode section
+
+    /// Inline 3-button mode picker — keeps Direct / Rule / Global one click
+    /// away from the menubar instead of buried in a submenu.
+    private var modeSection: some View {
+        let active = config.mode
+        let kernelReady = kernel.apiClient != nil
+        return HStack(spacing: 4) {
+            Image(systemName: "shippingbox")
+                .font(.system(size: 11))
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .frame(width: 14)
+            Text("模式")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Spacer(minLength: 8)
+            Picker("出站模式", selection: modePickerBinding) {
+                ForEach([MihomoMode.direct, .rule, .global], id: \.self) { mode in
+                    Text(mode.displayName).tag(Optional(mode))
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .disabled(!kernelReady)
+            .opacity(kernelReady ? 1 : 0.5)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .help(kernelReady ? "出站模式" : "切换模式需要内核运行中")
+    }
+
+    private var modePickerBinding: Binding<MihomoMode?> {
+        Binding(
+            get: { config.mode },
+            set: { newMode in
+                guard let newMode, newMode != config.mode else { return }
+                Task { await config.setMode(newMode, api: kernel.apiClient) }
+            }
+        )
+    }
+
+    // MARK: - Group section
+
+    @ViewBuilder
+    private var groupSection: some View {
+        if proxyStore.groups.isEmpty {
+            MenubarRowLabel(
+                icon: "globe",
+                title: "无可用代理组",
+                trailing: nil,
+                showsChevron: false
+            )
+            .opacity(0.5)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(proxyStore.groups) { group in
+                    groupRow(group)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func groupRow(_ group: MihomoProxy) -> some View {
+        let icon = groupIcon(for: group)
+        let now = group.now ?? "—"
+        if group.isUserSwitchable {
+            Menu {
+                if let members = group.all, !members.isEmpty {
+                    ForEach(members, id: \.self) { name in
+                        Button {
+                            Task {
+                                await proxyStore.select(
+                                    group: group.name,
+                                    name: name,
+                                    api: kernel.apiClient
+                                )
+                                await kernel.reload()
+                            }
+                        } label: {
+                            Label(name, systemImage: name == group.now ? "checkmark" : "")
+                        }
+                    }
+                } else {
+                    Text("（无节点）")
+                }
+            } label: {
+                MenubarRowLabel(icon: icon, title: group.name, trailing: now, showsChevron: true)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+        } else {
+            MenubarRowLabel(icon: icon, title: group.name, trailing: now, showsChevron: false)
+        }
+    }
+
+    private func groupIcon(for g: MihomoProxy) -> String {
+        switch g.type.lowercased() {
+        case "selector":    return "hand.tap"
+        case "urltest":     return "bolt.horizontal"
+        case "fallback":    return "arrow.uturn.backward.circle"
+        case "loadbalance": return "scale.3d"
+        case "relay":       return "arrow.triangle.swap"
+        default:            return "globe"
+        }
+    }
+
+    // MARK: - Profile section
+
+    private var profileSection: some View {
+        Menu {
             if profileStore.profiles.isEmpty {
-                Text("No profiles")
+                Text("（暂无配置）")
             } else {
                 ForEach(profileStore.profiles) { p in
                     Button {
                         profileStore.activate(p.id)
+                        Task { await kernel.reload() }
                     } label: {
-                        HStack {
-                            Image(systemName: profileStore.activeProfileID == p.id
-                                  ? "checkmark" : "")
-                            Text(p.name)
-                        }
+                        Label(
+                            p.name,
+                            systemImage: profileStore.activeProfileID == p.id ? "checkmark" : ""
+                        )
                     }
                 }
             }
-        }
-
-        Divider()
-
-        // 6. System proxy toggle
-        Button(systemProxy.enabled ? "✓ System Proxy" : "System Proxy") {
-            systemProxy.toggle()
-        }
-        .keyboardShortcut("p", modifiers: [.command, .shift])
-
-        // 7. Kernel control
-        Button(kernelToggleLabel) {
-            Task {
-                if isRunningOrStarting { kernel.stop() }
-                else { await kernel.start() }
-            }
-        }
-
-        Divider()
-
-        // 9. Live stats (non-selectable)
-        Text("\(connectionsStore.connections.count) active connections")
-        Text("Memory: \(ChFormat.bytes(traffic.memoryInUse))")
-
-        Divider()
-
-        // 11. Reload config
-        Button("Reload config") {
-            Task { await kernel.reload() }
-        }
-        .disabled(!isRunning)
-
-        // 12. Show ChungHwa
-        Button("Show ChungHwa") { showMainWindow() }
-            .keyboardShortcut("0", modifiers: [.command])
-
-        // 13. Quit
-        Button("Quit ChungHwa") { NSApp.terminate(nil) }
-            .keyboardShortcut("q", modifiers: [.command])
-    }
-
-    // MARK: - Status header
-
-    @ViewBuilder
-    private var statusTitle: some View {
-        switch kernel.status {
-        case .running(let v): Text("mihomo \(v)")
-        case .starting:       Text("Starting…")
-        case .failed:         Text("Failed")
-        case .idle:           Text("Idle")
-        }
-    }
-
-    private var rateLine: some View {
-        let up = traffic.current?.upBps ?? 0
-        let down = traffic.current?.downBps ?? 0
-        return Text("↑ \(ChFormat.rate(up)) · ↓ \(ChFormat.rate(down))")
-    }
-
-    // MARK: - Mode helpers
-
-    private var modeName: String {
-        config.mode?.displayName ?? "—"
-    }
-
-    @ViewBuilder
-    private func modeButton(_ m: MihomoMode) -> some View {
-        Button {
-            Task { await config.setMode(m, api: kernel.apiClient) }
         } label: {
-            HStack {
-                Image(systemName: config.mode == m ? "checkmark" : "")
-                Text(m.displayName)
+            MenubarRowLabel(
+                icon: "doc.text",
+                title: "切换配置",
+                trailing: profileStore.activeProfile?.name ?? "—",
+                showsChevron: true
+            )
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+    }
+
+    // MARK: - Dashboard section
+
+    private var dashboardSection: some View {
+        VStack(spacing: 0) {
+            Button(action: showMainWindow) {
+                MenubarRowLabel(
+                    icon: "rectangle.on.rectangle",
+                    title: "中華 Dashboard",
+                    trailing: "⌘M",
+                    showsChevron: false
+                )
             }
+            .buttonStyle(.plain)
+            .keyboardShortcut("m", modifiers: [.command])
+
+            Button(action: openWebDashboard) {
+                MenubarRowLabel(
+                    icon: "safari",
+                    title: "Web Dashboard",
+                    trailing: "⌘D",
+                    showsChevron: false
+                )
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("d", modifiers: [.command])
+            .disabled(!isRunning)
         }
     }
 
-    // MARK: - Profile helpers
-
-    private var activeProfileName: String {
-        profileStore.activeProfile?.name ?? "—"
+    private func openWebDashboard() {
+        guard let url = URL(string: "http://127.0.0.1:47913/ui") else { return }
+        NSWorkspace.shared.open(url)
     }
 
-    // MARK: - Kernel state
+    // MARK: - Kernel section
+
+    private var kernelSection: some View {
+        VStack(spacing: 0) {
+            Menu {
+                Button("启动内核") { Task { await kernel.start() } }
+                    .disabled(isRunningOrStarting)
+                Button("停止内核") { kernel.stop() }
+                    .disabled(!isRunningOrStarting)
+                Button("重启内核") { Task { await kernel.restart() } }
+                    .disabled(!isRunningOrStarting)
+                Divider()
+                Button("重载配置") { Task { await kernel.reload() } }
+                    .disabled(!isRunning)
+                Button("查看日志目录") { openLogsDirectory() }
+            } label: {
+                MenubarRowLabel(
+                    icon: "gearshape.2",
+                    title: "内核管理",
+                    trailing: kernelTrailingLabel,
+                    showsChevron: true
+                )
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+
+            Menu {
+                Button("打开 Application Support") { openAppSupportDirectory() }
+                Button("打开 mihomo 数据目录") { openMihomoDataDirectory() }
+            } label: {
+                MenubarRowLabel(
+                    icon: "folder",
+                    title: "目录位置",
+                    trailing: nil,
+                    showsChevron: true
+                )
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+        }
+    }
+
+    private var kernelTrailingLabel: String {
+        switch kernel.status {
+        case .running:  return "运行中"
+        case .starting: return "启动中"
+        case .failed:   return "失败"
+        case .idle:     return "未运行"
+        }
+    }
+
+    private func openLogsDirectory() {
+        // ChungHwa 不显式写文件日志，统一打到 unified-log；这里打开
+        // ~/Library/Logs/ChungHwa（不存在则降级到上层 Logs 目录）。
+        let fm = FileManager.default
+        let logs = fm.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs/ChungHwa", isDirectory: true)
+        let target: URL
+        if fm.fileExists(atPath: logs.path) {
+            target = logs
+        } else {
+            target = fm.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Logs", isDirectory: true)
+        }
+        NSWorkspace.shared.open(target)
+    }
+
+    private func openAppSupportDirectory() {
+        let dir = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ChungHwa", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(dir)
+    }
+
+    private func openMihomoDataDirectory() {
+        // mihomo 自带数据目录默认就是 Application Support/ChungHwa（kernel
+        // 由我们复合 config 后启动）。这里直接复用同一路径。
+        openAppSupportDirectory()
+    }
+
+    // MARK: - Footer section
+
+    private var footerSection: some View {
+        VStack(spacing: 0) {
+            // 检查更新（mihomo 内核）— 暂走 Settings 流程，这里只触发后台
+            // checkForUpdates，结果会在主窗口的 Settings 屏显示。
+            Button(action: checkForUpdates) {
+                MenubarRowLabel(
+                    icon: "arrow.down.circle",
+                    title: "检查内核更新",
+                    trailing: "⌘K",
+                    showsChevron: false
+                )
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("k", modifiers: [.command])
+
+            Button(action: openSettings) {
+                MenubarRowLabel(
+                    icon: "slider.horizontal.3",
+                    title: "设置",
+                    trailing: "⌘,",
+                    showsChevron: false
+                )
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(",", modifiers: [.command])
+
+            Button(action: { NSApp.terminate(nil) }) {
+                MenubarRowLabel(
+                    icon: "power",
+                    title: "退出中華",
+                    trailing: "⌘Q",
+                    showsChevron: false,
+                    tint: ChungHwa.Palette.earth
+                )
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("q", modifiers: [.command])
+        }
+    }
+
+    // 简化方案：菜单栏弹窗里没法直接拿 Sidebar selection（跨 Scene 边界），
+    // 这里只把主窗口拉起来。后续可以走 NotificationCenter 跳到 Settings 屏。
+    private func checkForUpdates() {
+        // KernelDownloader 不在本视图的 environment 里（避免再加注入面），
+        // 用 NotificationCenter 通知主窗口去执行；监听端尚未接入时静默。
+        NotificationCenter.default.post(name: .chungHwaCheckKernelUpdate, object: nil)
+    }
+
+    private func openSettings() {
+        showMainWindow()
+    }
+
+    // MARK: - Shared helpers
+
+    private var sectionDivider: some View {
+        Divider().opacity(0.3)
+    }
 
     private var isRunningOrStarting: Bool {
         switch kernel.status {
@@ -137,10 +635,6 @@ struct MenubarContent: View {
         return false
     }
 
-    private var kernelToggleLabel: String {
-        isRunningOrStarting ? "Stop kernel" : "Start kernel"
-    }
-
     private func showMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
         for w in NSApp.windows where w.canBecomeKey {
@@ -150,8 +644,66 @@ struct MenubarContent: View {
     }
 }
 
-/// Computes the SF Symbol name for the menubar icon based on the kernel state and
-/// whether the system proxy is engaged.
+// MARK: - Notification placeholder
+
+extension Notification.Name {
+    /// 菜单栏「检查内核更新」按下时发出。监听端（主窗口 Settings）暂未接入，
+    /// 后续再补；不接也不会报错，只是按钮变成 no-op。
+    static let chungHwaCheckKernelUpdate = Notification.Name("ChungHwa.CheckKernelUpdate")
+}
+
+// MARK: - Row primitive
+
+/// 单行菜单项的显示标签：左 icon、中 title、右可选 trailing label + chevron。
+/// 点击高亮由父 Button/Menu 的 hover 渲染，但 .plain 不带高亮，于是我们在
+/// onHover 里手动加 fill 背景。
+private struct MenubarRowLabel: View {
+    let icon: String
+    let title: String
+    let trailing: String?
+    let showsChevron: Bool
+    var tint: Color? = nil   // nil → 默认 Palette.text；非 nil → icon + 文字都改色
+
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .foregroundStyle(tint ?? ChungHwa.Palette.dim)
+                .frame(width: 16, alignment: .center)
+            Text(title)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(tint ?? ChungHwa.Palette.text)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            if let trailing, !trailing.isEmpty {
+                Text(trailing)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(hovering ? ChungHwa.Palette.fill : Color.clear)
+        )
+        .onHover { hovering = $0 }
+    }
+}
+
+// MARK: - Menubar icon (status-driven SF Symbol, unchanged from before)
+
 @MainActor
 struct MenubarIconName {
     static func current(kernel: KernelController, systemProxy: SystemProxyController) -> String {
