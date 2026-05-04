@@ -39,17 +39,20 @@ final class KernelController {
     private let logStore: LogStore
     private let profileStore: ProfileStore
     private let trafficStore: TrafficStore
+    private let connectionsStore: ConnectionsStore
     private let dataDir: URL
     private let configFile: URL
 
     init(resolver: KernelBinaryResolver,
          logStore: LogStore,
          profileStore: ProfileStore,
-         trafficStore: TrafficStore) {
+         trafficStore: TrafficStore,
+         connectionsStore: ConnectionsStore) {
         self.resolver = resolver
         self.logStore = logStore
         self.profileStore = profileStore
         self.trafficStore = trafficStore
+        self.connectionsStore = connectionsStore
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.dataDir = appSupport
@@ -222,6 +225,7 @@ final class KernelController {
         for task in streamTasks { task.cancel() }
         streamTasks = []
         trafficStore.reset()
+        connectionsStore.reset()
     }
 
     private func startStreams(_ stream: MihomoStreamClient) {
@@ -230,6 +234,7 @@ final class KernelController {
             startLogStream(stream),
             startTrafficStream(stream),
             startMemoryStream(stream),
+            startConnectionsStream(stream),
         ]
     }
 
@@ -262,6 +267,15 @@ final class KernelController {
         return Task {
             for await sample in await stream.memoryEvents() {
                 store.update(memory: sample)
+            }
+        }
+    }
+
+    private func startConnectionsStream(_ stream: MihomoStreamClient) -> Task<Void, Never> {
+        let store = self.connectionsStore
+        return Task {
+            for await snapshot in await stream.connectionsEvents() {
+                store.apply(snapshot)
             }
         }
     }

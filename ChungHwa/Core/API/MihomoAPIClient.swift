@@ -83,6 +83,14 @@ actor MihomoAPIClient {
         return nil
     }
 
+    func closeConnection(id: String) async throws {
+        _ = try await send(makeRequest(path: "/connections/\(escape(id))", method: "DELETE"))
+    }
+
+    func closeAllConnections() async throws {
+        _ = try await send(makeRequest(path: "/connections", method: "DELETE"))
+    }
+
     /// Test latency of every node in a group in a single call. Returns
     /// `[node-name: ms]`; nodes that timed out are omitted.
     func groupDelay(group: String,

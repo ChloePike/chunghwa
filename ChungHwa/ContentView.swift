@@ -25,12 +25,14 @@ struct ContentView: View {
     let logStore = LogStore()
     let profileStore = ProfileStore()
     let trafficStore = TrafficStore()
+    let connectionsStore = ConnectionsStore()
     return ContentView()
         .environment(KernelController(
             resolver: resolver,
             logStore: logStore,
             profileStore: profileStore,
-            trafficStore: trafficStore))
+            trafficStore: trafficStore,
+            connectionsStore: connectionsStore))
         .environment(resolver)
         .environment(KernelDownloader(resolver: resolver))
         .environment(logStore)
@@ -38,4 +40,5 @@ struct ContentView: View {
         .environment(SystemProxyController())
         .environment(ProxyStore())
         .environment(trafficStore)
+        .environment(connectionsStore)
 }

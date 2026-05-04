@@ -24,6 +24,3 @@ struct RulesView: View {
     var body: some View { ComingSoon(title: "Rules", symbol: "list.bullet.rectangle") }
 }
 
-struct ConnectionsView: View {
-    var body: some View { ComingSoon(title: "Connections", symbol: "link") }
-}

@@ -40,6 +40,10 @@ actor MihomoStreamClient {
         events(path: "/memory")
     }
 
+    func connectionsEvents() -> AsyncStream<MihomoConnectionsSnapshot> {
+        events(path: "/connections")
+    }
+
     private func events<E: Decodable & Sendable>(
         path: String,
         query: [URLQueryItem] = []

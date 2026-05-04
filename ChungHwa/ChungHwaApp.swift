@@ -16,6 +16,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.systemProxy)
                 .environment(appDelegate.proxyStore)
                 .environment(appDelegate.trafficStore)
+                .environment(appDelegate.connectionsStore)
         }
 
         MenuBarExtra {
@@ -39,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let systemProxy: SystemProxyController
     let proxyStore: ProxyStore
     let trafficStore: TrafficStore
+    let connectionsStore: ConnectionsStore
     let kernel: KernelController
 
     override init() {
@@ -48,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let systemProxy = SystemProxyController()
         let proxyStore = ProxyStore()
         let trafficStore = TrafficStore()
+        let connectionsStore = ConnectionsStore()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
         self.logStore = logStore
@@ -55,11 +58,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.systemProxy = systemProxy
         self.proxyStore = proxyStore
         self.trafficStore = trafficStore
+        self.connectionsStore = connectionsStore
         self.kernel = KernelController(
             resolver: resolver,
             logStore: logStore,
             profileStore: profileStore,
-            trafficStore: trafficStore
+            trafficStore: trafficStore,
+            connectionsStore: connectionsStore
         )
         super.init()
     }
