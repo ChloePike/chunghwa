@@ -28,8 +28,30 @@ private nonisolated struct SelectProxyBody: Encodable, Sendable {
     let name: String
 }
 
+/// Body for `PATCH /configs`. All fields are optional — only non-nil
+/// fields are encoded so we can hot-patch a single setting without
+/// clobbering anything else mihomo currently has.
+///
+/// `JSONEncoder` does *not* skip nil Optionals automatically (it emits
+/// `"key": null`), so we drive the keyed container manually with
+/// `encodeIfPresent`.
 private nonisolated struct PatchConfigBody: Encodable, Sendable {
-    let mode: String
+    var mode: String?
+    var logLevel: String?
+    var allowLan: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case mode
+        case logLevel = "log-level"
+        case allowLan = "allow-lan"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(mode,     forKey: .mode)
+        try c.encodeIfPresent(logLevel, forKey: .logLevel)
+        try c.encodeIfPresent(allowLan, forKey: .allowLan)
+    }
 }
 
 actor MihomoAPIClient {
@@ -71,6 +93,19 @@ actor MihomoAPIClient {
     /// Switch outbound mode. `mode` must be `rule`, `global`, or `direct`.
     func setMode(_ mode: MihomoMode) async throws {
         try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(mode: mode.rawValue))
+    }
+
+    /// Hot-patch the kernel's log verbosity. Accepts mihomo's canonical
+    /// values: `silent`, `error`, `warning`, `info`, `debug`. (The UI
+    /// uses "warn" so callers should normalize as needed.)
+    func setLogLevel(_ level: String) async throws {
+        try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(logLevel: level))
+    }
+
+    /// Toggle whether mihomo accepts inbound connections from the LAN
+    /// (i.e. binds the inbound listener to 0.0.0.0 vs 127.0.0.1).
+    func setAllowLan(_ allow: Bool) async throws {
+        try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(allowLan: allow))
     }
 
     /// Switch the upstream choice of a Selector group.

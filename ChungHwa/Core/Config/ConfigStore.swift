@@ -3,12 +3,14 @@ import Observation
 import OSLog
 
 /// Mirrors mihomo's `/configs` snapshot for the bits the UI cares about.
-/// Currently that's just outbound mode; expand as more toolbar bindings
-/// (LAN, log level, port, …) move into the chrome.
+/// Currently outbound mode + log level + LAN inbound; expand as more
+/// toolbar / settings bindings (port, …) move into the chrome.
 @Observable
 @MainActor
 final class ConfigStore {
     private(set) var mode: MihomoMode?
+    private(set) var logLevel: String?
+    private(set) var allowLan: Bool?
     private(set) var lastError: String?
     private(set) var isApplyingMode: Bool = false
 
@@ -16,6 +18,8 @@ final class ConfigStore {
 
     func reset() {
         mode = nil
+        logLevel = nil
+        allowLan = nil
         lastError = nil
         isApplyingMode = false
     }
@@ -25,6 +29,8 @@ final class ConfigStore {
         do {
             let cfg = try await api.config()
             mode = MihomoMode.parse(cfg.mode)
+            logLevel = cfg.logLevel
+            allowLan = cfg.allowLan
             lastError = nil
         } catch {
             lastError = String(describing: error)
@@ -48,6 +54,38 @@ final class ConfigStore {
             mode = previous
             lastError = String(describing: error)
             log.error("set mode \(next.rawValue, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
+        }
+    }
+
+    /// Push a new log level to mihomo. Optimistic; rolls back the cached
+    /// snapshot on failure but the @AppStorage value in the UI keeps the
+    /// user's choice (so the next kernel restart will retry implicitly).
+    func setLogLevel(_ level: String, api: MihomoAPIClient?) async {
+        guard let api else { return }
+        let previous = logLevel
+        logLevel = level
+        do {
+            try await api.setLogLevel(level)
+            lastError = nil
+        } catch {
+            logLevel = previous
+            lastError = String(describing: error)
+            log.error("set log-level \(level, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
+        }
+    }
+
+    /// Push the allow-lan flag. Optimistic + rollback on failure.
+    func setAllowLan(_ allow: Bool, api: MihomoAPIClient?) async {
+        guard let api else { return }
+        let previous = allowLan
+        allowLan = allow
+        do {
+            try await api.setAllowLan(allow)
+            lastError = nil
+        } catch {
+            allowLan = previous
+            lastError = String(describing: error)
+            log.error("set allow-lan \(allow, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
         }
     }
 }

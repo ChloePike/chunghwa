@@ -6,11 +6,15 @@ import SwiftUI
 /// Advanced settings tab — "Bone & Brass on Patina" design.
 ///
 /// All values are persisted via `@AppStorage` under the
-/// `ChungHwa.Advanced.*` namespace. None of these settings are pushed to
-/// mihomo's `/configs` endpoint yet — wiring lands in a later slice.
+/// `ChungHwa.Advanced.*` namespace. Two of them — `LogLevel` and
+/// `LANInbound` — are also pushed to mihomo's `/configs` endpoint at
+/// runtime (via `ConfigStore`); the rest remain local-only and require
+/// a kernel restart to take effect.
 ///
 /// Mirrors `AdvancedScreen` in `design/src/app.jsx` (lines 1245-1408).
 struct AdvancedView: View {
+    @Environment(KernelController.self) private var kernel
+    @Environment(ConfigStore.self)      private var config
 
     // ── Kernel logs ────────────────────────────────────────────────────
     @AppStorage("ChungHwa.Advanced.LogLevel")          private var logLevel: String  = "error"
@@ -54,6 +58,15 @@ struct AdvancedView: View {
         }
         .background(ChungHwa.Palette.bg)
         .navigationTitle("Advanced")
+        // Live-push to mihomo whenever the user flips the wired settings.
+        // The @AppStorage value is the source of truth for the UI; the
+        // store does an optimistic update + rollback against /configs.
+        .onChange(of: logLevel) { _, newValue in
+            Task { await config.setLogLevel(newValue, api: kernel.apiClient) }
+        }
+        .onChange(of: lan) { _, newValue in
+            Task { await config.setAllowLan(newValue, api: kernel.apiClient) }
+        }
     }
 
     // MARK: - Sections
@@ -65,13 +78,14 @@ struct AdvancedView: View {
                    label: "Log level",
                    sub: "Verbose output is written to ~/Library/Logs/ChungHwa") {
                 Stepper(value: $logLevel, options: [
-                    ("silent", "Silent"),
-                    ("error",  "Error"),
-                    ("warn",   "Warning"),
-                    ("info",   "Info"),
-                    ("debug",  "Debug"),
+                    ("silent",  "Silent"),
+                    ("error",   "Error"),
+                    ("warning", "Warning"),
+                    ("info",    "Info"),
+                    ("debug",   "Debug"),
                 ])
             }
+            FootnoteRow(text: "Pushed to mihomo at runtime · synced from /configs on kernel start")
             AdvRow(icon: "doc.text",
                    iconColor: ChungHwa.Palette.patina,
                    label: "View kernel log",
@@ -113,6 +127,7 @@ struct AdvancedView: View {
                     ("all", "Always"),
                 ])
             }
+            FootnoteRow(text: "Local — restart mihomo to apply")
         }
     }
 
@@ -144,6 +159,7 @@ struct AdvancedView: View {
                     .foregroundStyle(ChungHwa.Palette.dim)
                 IconButton(systemName: "chevron.right") { /* no-op */ }
             }
+            FootnoteRow(text: "Local — restart mihomo to apply")
         }
     }
 
@@ -158,6 +174,7 @@ struct AdvancedView: View {
                    last: true) {
                 Switch(isOn: $lan)
             }
+            FootnoteRow(text: "Pushed to mihomo at runtime · synced from /configs on kernel start")
         }
     }
 
@@ -308,6 +325,29 @@ private struct BypassEntry: Identifiable, Codable, Hashable {
     var ip: String
     var tag: Tag
     var locked: Bool
+}
+
+// MARK: - FootnoteRow
+
+/// Tiny faint caption that sits under a row inside an `AdvSection`. Lives
+/// inside the section card and gets a thin top divider, matching the
+/// hairline rule between regular rows.
+private struct FootnoteRow: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle()
+                .fill(ChungHwa.Palette.lineSoft)
+                .frame(height: 0.5)
+            Text(text)
+                .font(.system(size: 9.5))
+                .foregroundStyle(ChungHwa.Palette.faint)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 }
 
 // MARK: - AdvSection
