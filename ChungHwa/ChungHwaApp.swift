@@ -113,6 +113,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hide = UserDefaults.standard.bool(forKey: "ChungHwa.HideDockIcon")
         NSApp.setActivationPolicy(hide ? .accessory : .regular)
 
+        // SwiftUI's `.windowStyle(.hiddenTitleBar)` alone leaves the
+        // NavigationSplitView toolbar row at the top — visible as a chunky
+        // empty stripe above the sidebar / detail. Patch each window to
+        // also remove the toolbar and let content extend through the
+        // title-bar safe area.
+        DispatchQueue.main.async {
+            for window in NSApp.windows {
+                window.titlebarAppearsTransparent = true
+                window.titleVisibility = .hidden
+                window.styleMask.insert(.fullSizeContentView)
+                window.toolbar = nil
+                window.isMovableByWindowBackground = true
+            }
+        }
+
         // Initial kernel-update check, delayed so we don't compete with kernel startup.
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
