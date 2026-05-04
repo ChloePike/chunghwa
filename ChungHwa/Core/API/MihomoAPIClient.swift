@@ -39,18 +39,24 @@ private nonisolated struct PatchConfigBody: Encodable, Sendable {
     var mode: String?
     var logLevel: String?
     var allowLan: Bool?
+    var ipv6: Bool?
+    var tcpConcurrent: Bool?
 
     enum CodingKeys: String, CodingKey {
         case mode
         case logLevel = "log-level"
         case allowLan = "allow-lan"
+        case ipv6
+        case tcpConcurrent = "tcp-concurrent"
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encodeIfPresent(mode,     forKey: .mode)
-        try c.encodeIfPresent(logLevel, forKey: .logLevel)
-        try c.encodeIfPresent(allowLan, forKey: .allowLan)
+        try c.encodeIfPresent(mode,          forKey: .mode)
+        try c.encodeIfPresent(logLevel,      forKey: .logLevel)
+        try c.encodeIfPresent(allowLan,      forKey: .allowLan)
+        try c.encodeIfPresent(ipv6,          forKey: .ipv6)
+        try c.encodeIfPresent(tcpConcurrent, forKey: .tcpConcurrent)
     }
 }
 
@@ -106,6 +112,16 @@ actor MihomoAPIClient {
     /// (i.e. binds the inbound listener to 0.0.0.0 vs 127.0.0.1).
     func setAllowLan(_ allow: Bool) async throws {
         try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(allowLan: allow))
+    }
+
+    /// Toggle IPv6 support in the kernel.
+    func setIPv6(_ enabled: Bool) async throws {
+        try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(ipv6: enabled))
+    }
+
+    /// Toggle TCP-concurrent dialing (race multiple TCP streams to a node).
+    func setTCPConcurrent(_ enabled: Bool) async throws {
+        try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(tcpConcurrent: enabled))
     }
 
     /// Switch the upstream choice of a Selector group.

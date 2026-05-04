@@ -9,6 +9,8 @@ nonisolated struct MihomoConfig: Codable, Sendable {
     let allowLan: Bool?
     let port: Int?
     let socksPort: Int?
+    let ipv6: Bool?
+    let tcpConcurrent: Bool?
 
     enum CodingKeys: String, CodingKey {
         case mode
@@ -16,6 +18,8 @@ nonisolated struct MihomoConfig: Codable, Sendable {
         case allowLan = "allow-lan"
         case port
         case socksPort = "socks-port"
+        case ipv6
+        case tcpConcurrent = "tcp-concurrent"
     }
 }
 

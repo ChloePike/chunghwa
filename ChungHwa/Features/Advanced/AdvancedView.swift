@@ -67,6 +67,12 @@ struct AdvancedView: View {
         .onChange(of: lan) { _, newValue in
             Task { await config.setAllowLan(newValue, api: kernel.apiClient) }
         }
+        .onChange(of: ipv6) { _, newValue in
+            Task { await config.setIPv6(newValue, api: kernel.apiClient) }
+        }
+        .onChange(of: tcpConcurrent) { _, newValue in
+            Task { await config.setTCPConcurrent(newValue, api: kernel.apiClient) }
+        }
     }
 
     // MARK: - Sections
@@ -127,7 +133,7 @@ struct AdvancedView: View {
                     ("all", "Always"),
                 ])
             }
-            FootnoteRow(text: "Local — restart mihomo to apply")
+            FootnoteRow(text: "Live: TCP concurrent, IPv6 · Local: Unified delay, Disable QUIC")
         }
     }
 

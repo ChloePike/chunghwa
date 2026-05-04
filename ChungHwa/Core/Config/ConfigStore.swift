@@ -11,6 +11,8 @@ final class ConfigStore {
     private(set) var mode: MihomoMode?
     private(set) var logLevel: String?
     private(set) var allowLan: Bool?
+    private(set) var ipv6: Bool?
+    private(set) var tcpConcurrent: Bool?
     private(set) var lastError: String?
     private(set) var isApplyingMode: Bool = false
 
@@ -20,6 +22,8 @@ final class ConfigStore {
         mode = nil
         logLevel = nil
         allowLan = nil
+        ipv6 = nil
+        tcpConcurrent = nil
         lastError = nil
         isApplyingMode = false
     }
@@ -31,6 +35,8 @@ final class ConfigStore {
             mode = MihomoMode.parse(cfg.mode)
             logLevel = cfg.logLevel
             allowLan = cfg.allowLan
+            ipv6 = cfg.ipv6
+            tcpConcurrent = cfg.tcpConcurrent
             lastError = nil
         } catch {
             lastError = String(describing: error)
@@ -86,6 +92,36 @@ final class ConfigStore {
             allowLan = previous
             lastError = String(describing: error)
             log.error("set allow-lan \(allow, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
+        }
+    }
+
+    /// Push the ipv6 flag. Optimistic + rollback on failure.
+    func setIPv6(_ enabled: Bool, api: MihomoAPIClient?) async {
+        guard let api else { return }
+        let previous = ipv6
+        ipv6 = enabled
+        do {
+            try await api.setIPv6(enabled)
+            lastError = nil
+        } catch {
+            ipv6 = previous
+            lastError = String(describing: error)
+            log.error("set ipv6 \(enabled, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
+        }
+    }
+
+    /// Push the tcp-concurrent flag. Optimistic + rollback on failure.
+    func setTCPConcurrent(_ enabled: Bool, api: MihomoAPIClient?) async {
+        guard let api else { return }
+        let previous = tcpConcurrent
+        tcpConcurrent = enabled
+        do {
+            try await api.setTCPConcurrent(enabled)
+            lastError = nil
+        } catch {
+            tcpConcurrent = previous
+            lastError = String(describing: error)
+            log.error("set tcp-concurrent \(enabled, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
         }
     }
 }
