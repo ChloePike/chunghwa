@@ -35,7 +35,7 @@ struct ChungHwaCommands: Commands {
     @FocusedValue(\.logStore) private var logStore: LogStore?
 
     var body: some Commands {
-        CommandMenu("View") {
+        CommandMenu("视图") {
             tabButton(.overview,     key: "1")
             tabButton(.trafficStats, key: "2")
             tabButton(.connections,  key: "3")
@@ -53,47 +53,47 @@ struct ChungHwaCommands: Commands {
             tabButton(.settings, key: ",", modifiers: [.command])
         }
 
-        CommandMenu("ChungHwa") {
-            Button("Reload Config") {
+        CommandMenu("中華") {
+            Button("重载配置") {
                 guard let kernel else { return }
                 Task { await kernel.reload() }
             }
             .keyboardShortcut("r", modifiers: [.command])
             .disabled(kernel?.apiClient == nil)
 
-            Button("Clear Logs") {
+            Button("清空日志") {
                 logStore?.clear()
             }
             .keyboardShortcut("k", modifiers: [.command, .shift])
 
-            Button("Focus Filter") {
+            Button("聚焦搜索") {
                 NotificationCenter.default.post(name: .chungHwaFocusFilter, object: nil)
             }
             .keyboardShortcut("k", modifiers: [.command])
         }
 
         CommandGroup(replacing: .help) {
-            Button("ChungHwa on GitHub") {
+            Button("在 GitHub 上查看中華") {
                 openURL("https://github.com/ChloePike/chunghwa")
             }
 
-            Button("Report an Issue") {
+            Button("反馈问题") {
                 openURL("https://github.com/ChloePike/chunghwa/issues/new")
             }
 
             Divider()
 
-            Button("mihomo Documentation") {
+            Button("mihomo 文档") {
                 openURL("https://wiki.metacubex.one/")
             }
 
-            Button("mihomo on GitHub") {
+            Button("mihomo GitHub") {
                 openURL("https://github.com/MetaCubeX/mihomo")
             }
 
             Divider()
 
-            Button("About ChungHwa") {
+            Button("关于中華") {
                 NSApplication.shared.orderFrontStandardAboutPanel(nil)
             }
         }

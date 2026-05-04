@@ -10,10 +10,10 @@ private enum LogLevelFilter: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .all:   return "All"
-        case .info:  return "Info"
-        case .warn:  return "Warn"
-        case .error: return "Error"
+        case .all:   return "全部"
+        case .info:  return "信息"
+        case .warn:  return "警告"
+        case .error: return "错误"
         }
     }
 
@@ -97,7 +97,7 @@ struct LogsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: paused ? "play.fill" : "pause.fill")
                         .font(.system(size: 9, weight: .semibold))
-                    Text(paused ? "Resume" : "Pause")
+                    Text(paused ? "继续" : "暂停")
                 }
             }
 
@@ -105,7 +105,7 @@ struct LogsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "trash")
                         .font(.system(size: 9, weight: .semibold))
-                    Text("Clear")
+                    Text("清空")
                 }
             }
 
@@ -113,10 +113,10 @@ struct LogsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "square.and.arrow.down")
                         .font(.system(size: 9, weight: .semibold))
-                    Text("Save")
+                    Text("保存")
                 }
             }
-            .help("Export visible logs to a file")
+            .help("将当前日志导出为文件")
         }
     }
 
@@ -126,7 +126,7 @@ struct LogsView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.faint)
 
-            TextField("Filter…", text: $query)
+            TextField("过滤…", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(ChungHwa.Palette.text)
@@ -158,12 +158,12 @@ struct LogsView: View {
         let visible = visibleLines.count
         let total = sourceLines.count
         if isSearching && visible == 0 {
-            Text("no matches")
+            Text("无匹配")
                 .font(ChungHwa.Typography.mono(11))
                 .foregroundStyle(ChungHwa.Palette.earth)
                 .monospacedDigit()
         } else {
-            Text("\(visible) / \(total) lines")
+            Text("\(visible) / \(total) 行")
                 .font(ChungHwa.Typography.mono(11))
                 .foregroundStyle(ChungHwa.Palette.faint)
                 .monospacedDigit()
@@ -256,7 +256,7 @@ struct LogsView: View {
         let defaultFilename = "chunghwa-logs-\(Self.exportFilenameFormatter.string(from: Date())).txt"
 
         let panel = NSSavePanel()
-        panel.title = "Save logs"
+        panel.title = "保存日志"
         panel.allowedContentTypes = [.plainText]
         panel.nameFieldStringValue = defaultFilename
 

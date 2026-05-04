@@ -28,9 +28,9 @@ enum MihomoMode: String, Codable, CaseIterable, Sendable {
 
     var displayName: String {
         switch self {
-        case .rule:   return "Rule"
-        case .global: return "Global"
-        case .direct: return "Direct"
+        case .rule:   return "规则"
+        case .global: return "全局"
+        case .direct: return "直连"
         }
     }
 

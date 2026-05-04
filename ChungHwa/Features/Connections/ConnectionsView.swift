@@ -138,7 +138,7 @@ struct ConnectionsView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.faint)
-                TextField("Filter connections", text: $query)
+                TextField("过滤连接", text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(ChungHwa.Palette.text)
@@ -162,7 +162,7 @@ struct ConnectionsView: View {
                     .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
             )
 
-            Text("\(activeCount) active · \(rows.count) total")
+            Text("\(activeCount) 活跃 · \(rows.count) 总数")
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .monospacedDigit()
@@ -237,16 +237,16 @@ struct ConnectionsView: View {
     private var card: some View {
         ChCard(padding: 0) {
             if kernel.apiClient == nil {
-                emptyState(title: "Kernel is not running",
+                emptyState(title: "内核未运行",
                            system: "powerplug",
-                           subtitle: "Connections appear here once mihomo is up.")
+                           subtitle: "mihomo 启动后连接会显示在这里。")
             } else {
                 VStack(spacing: 0) {
                     headerRow
                     if rows.isEmpty {
-                        emptyState(title: "No active connections",
+                        emptyState(title: "无活跃连接",
                                    system: "link.circle",
-                                   subtitle: "Browse a website to see proxied connections.")
+                                   subtitle: "访问网站后会显示被代理的连接。")
                     } else {
                         rowList
                     }
@@ -259,11 +259,11 @@ struct ConnectionsView: View {
     private var headerRow: some View {
         ConnectionsGridRow(
             dot:     { Color.clear.frame(width: 12, height: 12) },
-            host:    { headerCell("Host", alignment: .leading) },
-            process: { headerCell("Process", alignment: .leading) },
-            down:    { headerCell("Down", alignment: .trailing) },
-            up:      { headerCell("Up", alignment: .trailing) },
-            rule:    { headerCell("Rule", alignment: .leading) }
+            host:    { headerCell("主机", alignment: .leading) },
+            process: { headerCell("进程", alignment: .leading) },
+            down:    { headerCell("下载", alignment: .trailing) },
+            up:      { headerCell("上传", alignment: .trailing) },
+            rule:    { headerCell("规则", alignment: .leading) }
         )
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -359,7 +359,7 @@ struct ConnectionsView: View {
             rows.first(where: { $0.id == id })
         }
 
-        Button("Copy host") {
+        Button("复制主机") {
             let value = conns
                 .map { $0.metadata.host ?? $0.metadata.destinationIP ?? "—" }
                 .joined(separator: "\n")
@@ -367,7 +367,7 @@ struct ConnectionsView: View {
         }
         .disabled(conns.isEmpty)
 
-        Button("Copy IP") {
+        Button("复制 IP") {
             let value = conns
                 .map { $0.metadata.destinationIP ?? "—" }
                 .joined(separator: "\n")
@@ -375,19 +375,19 @@ struct ConnectionsView: View {
         }
         .disabled(conns.isEmpty)
 
-        Button("Copy host:port") {
+        Button("复制 主机:端口") {
             let value = conns.map { $0.destination }.joined(separator: "\n")
             Self.copy(value)
         }
         .disabled(conns.isEmpty)
 
-        Button("Copy chain") {
+        Button("复制链路") {
             let value = conns.map { $0.chainPath }.joined(separator: "\n")
             Self.copy(value)
         }
         .disabled(conns.isEmpty)
 
-        Button("Copy as JSON") {
+        Button("复制 JSON") {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let pieces: [String] = conns.compactMap { conn in
@@ -400,7 +400,7 @@ struct ConnectionsView: View {
 
         Divider()
 
-        Button("Close", role: .destructive) {
+        Button("关闭连接", role: .destructive) {
             let api = kernel.apiClient
             for id in ids {
                 Task { await store.close(id: id, api: api) }
@@ -669,7 +669,7 @@ private struct ConnectionInspector: View {
             right: {
                 HStack(spacing: 6) {
                     if ended {
-                        Text("Connection ended")
+                        Text("连接已结束")
                             .font(.system(size: 10, weight: .semibold))
                             .tracking(0.3)
                             .textCase(.uppercase)
@@ -694,7 +694,7 @@ private struct ConnectionInspector: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .help("Close panel")
+                    .help("关闭面板")
                 }
             }
         ) {
@@ -727,33 +727,33 @@ private struct ConnectionInspector: View {
     // MARK: blocks
 
     private var destinationBlock: some View {
-        block(title: "Destination") {
-            row("Host",    valueText(connection.metadata.host ?? "—"), masked: true)
+        block(title: "目标") {
+            row("主机",    valueText(connection.metadata.host ?? "—"), masked: true)
             row("IP",      valueText(connection.metadata.destinationIP ?? "—"), masked: true)
-            row("Port",    valueText(connection.metadata.destinationPort ?? "—"))
-            row("Network", valueText(connection.metadata.network?.uppercased() ?? "—"))
-            row("Type",    valueText(connection.metadata.type ?? "—"))
+            row("端口",    valueText(connection.metadata.destinationPort ?? "—"))
+            row("网络",    valueText(connection.metadata.network?.uppercased() ?? "—"))
+            row("类型",    valueText(connection.metadata.type ?? "—"))
         }
     }
 
     private var processBlock: some View {
-        block(title: "Process") {
-            row("Name",
+        block(title: "进程") {
+            row("名称",
                 valueText(connection.metadata.process ?? "—"),
                 masked: true)
-            row("Path",
+            row("路径",
                 valueText(truncateMiddle(connection.metadata.processPath ?? "—",
                                          max: 56))
                     .help(connection.metadata.processPath ?? ""),
                 masked: true)
-            row("Source",
+            row("来源",
                 valueText(formattedSource),
                 masked: true)
         }
     }
 
     private var routingBlock: some View {
-        block(title: "Routing") {
+        block(title: "路由") {
             // `chains` is ordered from upstream-most to root group; the design
             // shows the active proxy at the top, so we walk it reversed.
             let path = connection.chains.reversed().map { String($0) }
@@ -786,19 +786,19 @@ private struct ConnectionInspector: View {
     }
 
     private var ruleBlock: some View {
-        block(title: "Rule") {
-            row("Rule", valueText(connection.rule))
+        block(title: "规则") {
+            row("规则", valueText(connection.rule))
             if let payload = connection.rulePayload, !payload.isEmpty {
-                row("Payload", valueText(payload))
+                row("载荷", valueText(payload))
             }
         }
     }
 
     private var statsBlock: some View {
-        block(title: "Stats") {
+        block(title: "统计") {
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Upload")
+                    Text("上传")
                         .font(.system(size: 10.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
                     Text("↑ \(ChFormat.bytes(connection.upload))")
@@ -807,7 +807,7 @@ private struct ConnectionInspector: View {
                         .monospacedDigit()
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Download")
+                    Text("下载")
                         .font(.system(size: 10.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
                     Text("↓ \(ChFormat.bytes(connection.download))")
@@ -817,7 +817,7 @@ private struct ConnectionInspector: View {
                 }
                 Spacer(minLength: 0)
             }
-            row("Elapsed", valueText(elapsedString))
+            row("时长", valueText(elapsedString))
         }
     }
 
@@ -827,7 +827,7 @@ private struct ConnectionInspector: View {
                 HStack(spacing: 6) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
-                    Text("Close connection")
+                    Text("关闭连接")
                         .font(.system(size: 11.5, weight: .semibold))
                 }
                 .foregroundStyle(.white)

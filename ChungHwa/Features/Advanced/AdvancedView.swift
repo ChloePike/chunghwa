@@ -77,23 +77,23 @@ struct AdvancedView: View {
     // MARK: - Sections
 
     private var kernelLogs: some View {
-        AdvSection(title: "Kernel logs") {
+        AdvSection(title: "内核日志") {
             AdvRow(icon: "list.bullet",
                    iconColor: ChungHwa.Palette.brass,
-                   label: "Log level",
-                   sub: "Verbose output is written to ~/Library/Logs/ChungHwa") {
+                   label: "日志级别",
+                   sub: "详细输出写入 ~/Library/Logs/ChungHwa") {
                 Stepper(value: $logLevel, options: [
-                    ("silent",  "Silent"),
-                    ("error",   "Error"),
-                    ("warning", "Warning"),
-                    ("info",    "Info"),
-                    ("debug",   "Debug"),
+                    ("silent",  "静默"),
+                    ("error",   "错误"),
+                    ("warning", "警告"),
+                    ("info",    "信息"),
+                    ("debug",   "调试"),
                 ])
             }
-            FootnoteRow(text: "Pushed to mihomo at runtime · synced from /configs on kernel start")
+            FootnoteRow(text: "实时同步至 mihomo · 启动时从 /configs 拉回")
             AdvRow(icon: "doc.text",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "View kernel log",
+                   label: "查看内核日志",
                    last: true) {
                 IconButton(systemName: "arrow.up.forward") {
                     NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Utilities/Console.app"))
@@ -103,36 +103,36 @@ struct AdvancedView: View {
     }
 
     private var connectionOptimization: some View {
-        AdvSection(title: "Connection optimization") {
+        AdvSection(title: "连接优化") {
             AdvRow(icon: "arrow.triangle.2.circlepath",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "Unified delay test",
-                   sub: "Requires kernel restart") {
+                   label: "统一延迟测试",
+                   sub: "需要重启内核") {
                 Switch(isOn: $unifiedDelay)
             }
             AdvRow(icon: "link",
                    iconColor: ChungHwa.Palette.brass,
-                   label: "TCP concurrent connections",
-                   sub: "Open multiple TCP streams to the chosen node") {
+                   label: "TCP 并发连接",
+                   sub: "对所选节点开多条 TCP 流") {
                 Switch(isOn: $tcpConcurrent)
             }
             AdvRow(icon: "globe",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "IPv6 support") {
+                   label: "IPv6 支持") {
                 Switch(isOn: $ipv6)
             }
             AdvRow(icon: "cube",
                    iconColor: ChungHwa.Palette.brass,
-                   label: "Disable QUIC",
-                   sub: "Some networks throttle QUIC; falling back to TCP improves stability",
+                   label: "禁用 QUIC",
+                   sub: "部分网络限速 QUIC，回落 TCP 更稳",
                    last: true) {
                 Stepper(value: $quic, options: [
-                    ("off", "Never"),
-                    ("ext", "Outside LAN only"),
-                    ("all", "Always"),
+                    ("off", "从不"),
+                    ("ext", "仅外网"),
+                    ("all", "总是"),
                 ])
             }
-            FootnoteRow(text: "Live: TCP concurrent, IPv6 · Local: Unified delay, Disable QUIC")
+            FootnoteRow(text: "实时: TCP 并发、IPv6 · 本地: 统一延迟、禁用 QUIC")
         }
     }
 
@@ -140,61 +140,61 @@ struct AdvancedView: View {
         AdvSection(title: "DNS") {
             AdvRow(icon: "arrow.left.arrow.right",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "Resolution mode",
-                   sub: "Smart routes domestic to system, foreign to fake-ip") {
+                   label: "解析模式",
+                   sub: "智能模式: 国内走系统，国外走 fake-ip") {
                 Stepper(value: $dnsMode, options: [
-                    ("system",  "System"),
-                    ("smart",   "Smart"),
+                    ("system",  "系统"),
+                    ("smart",   "智能"),
                     ("fake-ip", "Fake-IP"),
                 ])
             }
             AdvRow(icon: "shield",
                    iconColor: ChungHwa.Palette.brass,
-                   label: "Hijack port 53",
-                   sub: "Capture all DNS traffic on the system") {
+                   label: "劫持 53 端口",
+                   sub: "捕获系统所有 DNS 流量") {
                 Switch(isOn: $dnsHijack)
             }
             AdvRow(icon: "network",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "Upstream resolvers",
-                   sub: "One per line; supports DoH, DoT, DoQ",
+                   label: "上游解析器",
+                   sub: "每行一条；支持 DoH、DoT、DoQ",
                    last: true) {
-                Text("4 active")
+                Text("4 个生效")
                     .font(ChungHwa.Typography.mono(11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                 IconButton(systemName: "chevron.right") { /* no-op */ }
             }
-            FootnoteRow(text: "Local — restart mihomo to apply")
+            FootnoteRow(text: "本地保存 —— 重启 mihomo 生效")
         }
     }
 
     private var lanInbound: some View {
-        AdvSection(title: "LAN inbound") {
+        AdvSection(title: "局域网入站") {
             AdvRow(icon: "network",
                    iconColor: lan ? ChungHwa.Palette.brass : ChungHwa.Palette.patina,
-                   label: "Allow connections from local network",
+                   label: "允许局域网连接",
                    sub: lan
-                        ? "Other devices can use this Mac as a gateway"
-                        : "Only this Mac can connect to the proxy",
+                        ? "其他设备可使用此 Mac 作为网关"
+                        : "只有此 Mac 能连接代理",
                    last: true) {
                 Switch(isOn: $lan)
             }
-            FootnoteRow(text: "Pushed to mihomo at runtime · synced from /configs on kernel start")
+            FootnoteRow(text: "实时同步至 mihomo · 启动时从 /configs 拉回")
         }
     }
 
     private var proxyAuth: some View {
-        AdvSection(title: "Proxy authentication") {
+        AdvSection(title: "代理认证") {
             AdvRow(icon: "shield",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "Username") {
-                TextInputField(text: $authUser, placeholder: "optional")
+                   label: "用户名") {
+                TextInputField(text: $authUser, placeholder: "可选")
             }
             AdvRow(icon: "shield",
                    iconColor: ChungHwa.Palette.brass,
-                   label: "Password") {
+                   label: "密码") {
                 TextInputField(text: $authPass,
-                               placeholder: "optional",
+                               placeholder: "可选",
                                isSecure: !showPass,
                                mono: true) {
                     Button {
@@ -209,9 +209,9 @@ struct AdvancedView: View {
             }
             // Footer note as a final non-row element inside the section card.
             HStack(alignment: .top, spacing: 0) {
-                (Text("Local connections (")
+                (Text("本地连接（")
                     + Text("127.0.0.0/8").font(ChungHwa.Typography.mono(10.5))
-                    + Text(") bypass authentication by default."))
+                    + Text("）默认绕过认证。"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(ChungHwa.Palette.faint)
             }
@@ -228,17 +228,17 @@ struct AdvancedView: View {
     }
 
     private var bypassList: some View {
-        AdvSection(title: "IP ranges that bypass authentication") {
+        AdvSection(title: "绕过认证的 IP 段") {
             // Add row
             HStack(spacing: 8) {
                 TextInputField(text: $newIp,
-                               placeholder: "e.g. 198.18.0.0/16",
+                               placeholder: "例如 198.18.0.0/16",
                                mono: true,
                                fillsWidth: true)
                 Button(action: addIp) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
-                        Text("Add").font(.system(size: 11, weight: .semibold))
+                        Text("添加").font(.system(size: 11, weight: .semibold))
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
@@ -311,8 +311,8 @@ private struct BypassEntry: Identifiable, Codable, Hashable {
 
         var label: String {
             switch self {
-            case .defaultTag: return "Default"
-            case .custom:     return "Custom"
+            case .defaultTag: return "默认"
+            case .custom:     return "自定义"
             case .tailscale:  return "Tailscale"
             }
         }

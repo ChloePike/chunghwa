@@ -6,7 +6,7 @@ enum ProfileSource: Codable, Sendable, Equatable {
 
     var displayName: String {
         switch self {
-        case .file:   return "File"
+        case .file:   return "文件"
         case .url(_): return "URL"
         }
     }

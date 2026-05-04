@@ -74,7 +74,7 @@ struct RulesView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.faint)
-                TextField("Filter rules", text: $query)
+                TextField("过滤规则", text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(ChungHwa.Palette.text)
@@ -115,8 +115,8 @@ struct RulesView: View {
     private var countText: String {
         let total = store.rules.count
         let shown = filtered.count
-        if shown == total { return "\(total) rules" }
-        return "\(shown) / \(total) rules"
+        if shown == total { return "\(total) 条规则" }
+        return "\(shown) / \(total) 条规则"
     }
 
     // MARK: - Type filter chips
@@ -125,7 +125,7 @@ struct RulesView: View {
         VStack(alignment: .leading, spacing: 6) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    typeChip(label: "All", count: store.rules.count, isActive: typeFilter == nil) {
+                    typeChip(label: "全部", count: store.rules.count, isActive: typeFilter == nil) {
                         typeFilter = nil
                     }
                     ForEach(typeCounts, id: \.type) { entry in
@@ -142,7 +142,7 @@ struct RulesView: View {
                 .padding(.vertical, 1)
             }
             if hasActiveFilter {
-                Text("Showing \(filtered.count) of \(store.rules.count)")
+                Text("显示 \(filtered.count) / \(store.rules.count)")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .monospacedDigit()
@@ -185,7 +185,7 @@ struct RulesView: View {
     private var providersBanner: some View {
         ChCard(padding: 10) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("RULE PROVIDERS")
+                Text("规则提供方")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(ChungHwa.Palette.faint)
@@ -204,7 +204,7 @@ struct RulesView: View {
                                 .font(.system(size: 10.5))
                                 .foregroundStyle(ChungHwa.Palette.faint)
                             Spacer(minLength: 0)
-                            Text("\(p.ruleCount) rules")
+                            Text("\(p.ruleCount) 条规则")
                                 .font(.system(size: 11))
                                 .foregroundStyle(ChungHwa.Palette.dim)
                                 .monospacedDigit()
@@ -236,7 +236,7 @@ struct RulesView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 10, weight: .medium))
                 }
-                Text("Update")
+                Text("更新")
                     .font(.system(size: 11, weight: .medium))
             }
             .foregroundStyle(ChungHwa.Palette.text)
@@ -258,18 +258,18 @@ struct RulesView: View {
     private var card: some View {
         ChCard(padding: 0) {
             if kernel.apiClient == nil {
-                emptyState(title: "Kernel is not running",
+                emptyState(title: "内核未运行",
                            system: "powerplug",
-                           subtitle: "Rules appear here once mihomo is up.")
+                           subtitle: "mihomo 启动后规则会显示在这里。")
             } else {
                 VStack(spacing: 0) {
                     headerRow
                     if filtered.isEmpty {
-                        emptyState(title: store.rules.isEmpty ? "No rules" : "No matches",
+                        emptyState(title: store.rules.isEmpty ? "暂无规则" : "无匹配",
                                    system: "list.bullet.rectangle",
                                    subtitle: store.rules.isEmpty
-                                       ? "Reload a profile that declares routing rules."
-                                       : "Try a different search term.")
+                                       ? "请加载含路由规则的配置。"
+                                       : "请换一个搜索词。")
                     } else {
                         rowList
                     }
@@ -281,10 +281,10 @@ struct RulesView: View {
     private var headerRow: some View {
         RulesGridRow(
             index:  { headerCell("#", alignment: .leading) },
-            type:   { headerCell("Type", alignment: .leading) },
-            match:  { headerCell("Match", alignment: .leading) },
-            action: { headerCell("Action", alignment: .leading) },
-            hits:   { headerCell("Hits", alignment: .trailing) }
+            type:   { headerCell("类型", alignment: .leading) },
+            match:  { headerCell("匹配", alignment: .leading) },
+            action: { headerCell("动作", alignment: .leading) },
+            hits:   { headerCell("命中", alignment: .trailing) }
         )
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

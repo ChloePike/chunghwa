@@ -39,11 +39,11 @@ struct ProvidersView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Providers")
+            Text("提供方")
                 .font(ChungHwa.Typography.serif(20, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.text)
                 .tracking(-0.2)
-            Text("\(subscriptionProfiles.count) subscription · \(proxyProviderStore.providers.count) proxy · \(ruleStore.providers.count) rule")
+            Text("\(subscriptionProfiles.count) 订阅 · \(proxyProviderStore.providers.count) 代理 · \(ruleStore.providers.count) 规则")
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.dim)
         }
@@ -52,11 +52,11 @@ struct ProvidersView: View {
     // MARK: - Subscription profiles (URL-source ProfileStore profiles)
 
     private var subscriptionProfilesCard: some View {
-        ChCardWithHeader("Subscription profiles",
+        ChCardWithHeader("订阅配置",
                          systemImage: "shippingbox",
                          iconColor: ChungHwa.Palette.patina) {
             if subscriptionProfiles.isEmpty {
-                Text("No subscription profiles. Add one in Profiles → From URL…")
+                Text("暂无订阅配置。可在「配置」页 → 从 URL… 添加。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(ChungHwa.Palette.faint)
                     .padding(.vertical, 6)
@@ -101,13 +101,13 @@ struct ProvidersView: View {
     // MARK: - Proxy providers (mihomo /providers/proxies)
 
     private var proxyProvidersCard: some View {
-        ChCardWithHeader("Proxy providers",
+        ChCardWithHeader("代理提供方",
                          systemImage: "shippingbox",
                          iconColor: ChungHwa.Palette.brass) {
             if proxyProviderStore.providers.isEmpty {
                 Text(kernel.apiClient == nil
-                     ? "Kernel is not running."
-                     : "No proxy providers in the active profile.")
+                     ? "内核未运行。"
+                     : "当前配置不含代理提供方。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(ChungHwa.Palette.faint)
                     .padding(.vertical, 6)
@@ -166,7 +166,7 @@ struct ProvidersView: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .disabled(kernel.apiClient == nil || inFlight)
-                .help("Refresh provider")
+                .help("刷新提供方")
 
                 Button {
                     Task { await proxyProviderStore.healthcheck(p.name, api: kernel.apiClient) }
@@ -177,7 +177,7 @@ struct ProvidersView: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .disabled(kernel.apiClient == nil || inFlight)
-                .help("Healthcheck nodes")
+                .help("检查节点健康")
             }
             .padding(.top, 2)
         }
@@ -193,28 +193,28 @@ struct ProvidersView: View {
         let used = upload + download
         if total <= 0 && used <= 0 { return nil }
         if total <= 0 {
-            return "Used: \(ChFormat.bytes(used))"
+            return "已用: \(ChFormat.bytes(used))"
         }
-        return "Used: \(ChFormat.bytes(used)) / \(ChFormat.bytes(total))"
+        return "已用: \(ChFormat.bytes(used)) / \(ChFormat.bytes(total))"
     }
 
     /// e.g. `Expires: in 26 days`. mihomo uses `0` to mean never-expires.
     private func subscriptionExpiresLine(_ info: MihomoProxyProvider.SubscriptionInfo) -> String? {
         guard let expire = info.Expire, expire > 0 else { return nil }
         let date = Date(timeIntervalSince1970: TimeInterval(expire))
-        return "Expires: \(date.formatted(.relative(presentation: .named)))"
+        return "到期: \(date.formatted(.relative(presentation: .named)))"
     }
 
     // MARK: - Rule providers
 
     private var ruleProvidersCard: some View {
-        ChCardWithHeader("Rule providers",
+        ChCardWithHeader("规则提供方",
                          systemImage: "list.bullet.rectangle",
                          iconColor: ChungHwa.Palette.brass) {
             if ruleStore.providers.isEmpty {
                 Text(kernel.apiClient == nil
-                     ? "Kernel is not running."
-                     : "No rule-set providers in the active profile.")
+                     ? "内核未运行。"
+                     : "当前配置不含规则集提供方。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(ChungHwa.Palette.faint)
                     .padding(.vertical, 6)
@@ -241,7 +241,7 @@ struct ProvidersView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(p.name).font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(ChungHwa.Palette.text)
-                Text("\(p.behavior) · \(p.type) · \(p.ruleCount) rules")
+                Text("\(p.behavior) · \(p.type) · \(p.ruleCount) 条规则")
                     .font(.system(size: 10.5))
                     .foregroundStyle(ChungHwa.Palette.faint)
             }

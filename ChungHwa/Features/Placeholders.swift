@@ -10,7 +10,7 @@ private struct ComingSoon: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.tertiary)
             Text(title).font(.title2.weight(.semibold))
-            Text("Coming in a later milestone.")
+            Text("将在后续里程碑上线。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

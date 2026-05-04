@@ -11,18 +11,18 @@ enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .overview:      return "Overview"
-        case .trafficStats:  return "Traffic Stats"
-        case .connections:   return "Connections"
-        case .logs:          return "Logs"
-        case .topology:      return "Topology"
-        case .routeMap:      return "Route Map"
-        case .proxies:       return "Proxies"
-        case .rules:         return "Rules"
-        case .providers:     return "Providers"
-        case .profiles:      return "Profiles"
-        case .advanced:      return "Advanced"
-        case .settings:      return "Settings"
+        case .overview:      return "概览"
+        case .trafficStats:  return "流量"
+        case .connections:   return "连接"
+        case .logs:          return "日志"
+        case .topology:      return "拓扑"
+        case .routeMap:      return "路由"
+        case .proxies:       return "代理"
+        case .rules:         return "规则"
+        case .providers:     return "提供方"
+        case .profiles:      return "配置"
+        case .advanced:      return "高级"
+        case .settings:      return "设置"
         }
     }
 
@@ -55,8 +55,8 @@ extension SidebarTab {
     /// the footer slot — not present in any section.
     static let sections: [SidebarSection] = [
         .init(id: "main",          header: nil,             tabs: [.overview, .trafficStats, .connections, .logs]),
-        .init(id: "visualization", header: "Visualization", tabs: [.topology, .routeMap]),
-        .init(id: "proxy",         header: "Proxy",         tabs: [.proxies, .rules, .providers]),
-        .init(id: "config",        header: "Config",        tabs: [.profiles, .advanced]),
+        .init(id: "visualization", header: "可视化",          tabs: [.topology, .routeMap]),
+        .init(id: "proxy",         header: "代理",            tabs: [.proxies, .rules, .providers]),
+        .init(id: "config",        header: "配置",            tabs: [.profiles, .advanced]),
     ]
 }

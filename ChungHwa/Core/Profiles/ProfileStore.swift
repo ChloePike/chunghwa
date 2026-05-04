@@ -156,7 +156,7 @@ final class ProfileStore {
             lastError = nil
             return profile
         } catch {
-            lastError = "Import failed: \(error)"
+            lastError = "导入失败: \(error)"
             log.error("addFile \(url.path, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             throw error
         }
@@ -180,7 +180,7 @@ final class ProfileStore {
             lastError = nil
             return profile
         } catch {
-            lastError = "Add URL failed: \(error)"
+            lastError = "添加 URL 失败: \(error)"
             log.error("addURL \(url.absoluteString, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             throw error
         }

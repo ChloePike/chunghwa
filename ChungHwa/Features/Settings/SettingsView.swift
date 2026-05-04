@@ -36,7 +36,7 @@ struct SettingsView: View {
     // MARK: - About
 
     private var aboutCard: some View {
-        ChCardWithHeader("About",
+        ChCardWithHeader("关于",
                          systemImage: "info.circle",
                          iconColor: ChungHwa.Palette.brass) {
             HStack(alignment: .center, spacing: 14) {
@@ -55,11 +55,11 @@ struct SettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("ChungHwa")
+                    Text("中華")
                         .font(ChungHwa.Typography.serif(22, weight: .semibold))
                         .foregroundStyle(ChungHwa.Palette.text)
                         .tracking(-0.4)
-                    Text("mihomo controller for macOS · v\(Self.shortVersion)+\(Self.buildVersion)")
+                    Text("macOS 上的 mihomo 客户端 · v\(Self.shortVersion)+\(Self.buildVersion)")
                         .font(.system(size: 11.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
                         .textSelection(.enabled)
@@ -84,7 +84,7 @@ struct SettingsView: View {
     // MARK: - Startup
 
     private var startupCard: some View {
-        ChCardWithHeader("Startup",
+        ChCardWithHeader("启动",
                          systemImage: "power",
                          iconColor: ChungHwa.Palette.brass) {
             VStack(alignment: .leading, spacing: 10) {
@@ -93,7 +93,7 @@ struct SettingsView: View {
                         get: { loginItem.isRegistered },
                         set: { loginItem.setEnabled($0) }
                     )) {
-                        Text("Launch at login")
+                        Text("开机启动")
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(ChungHwa.Palette.text)
                     }
@@ -110,7 +110,7 @@ struct SettingsView: View {
                 }
 
                 Toggle(isOn: $closeKeepsRunning) {
-                    Text("Close window keeps app running")
+                    Text("关窗保持后台运行")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(ChungHwa.Palette.text)
                 }
@@ -119,7 +119,7 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle(isOn: $hideDockIcon) {
-                        Text("Hide Dock icon")
+                        Text("隐藏 Dock 图标")
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(ChungHwa.Palette.text)
                     }
@@ -129,7 +129,7 @@ struct SettingsView: View {
                         NSApp.setActivationPolicy(newValue ? .accessory : .regular)
                     }
 
-                    Text("Run as a menubar-only app. No Dock icon, no cmd-tab. Use the menubar to bring it back.")
+                    Text("仅作为菜单栏应用运行。无 Dock 图标、无 cmd-tab。可通过菜单栏唤回。")
                         .font(.system(size: 11))
                         .foregroundStyle(ChungHwa.Palette.dim)
                         .fixedSize(horizontal: false, vertical: true)
@@ -144,7 +144,7 @@ struct SettingsView: View {
     // MARK: - Updates
 
     private var updatesCard: some View {
-        ChCardWithHeader("Updates",
+        ChCardWithHeader("更新",
                          systemImage: "arrow.down.circle",
                          iconColor: ChungHwa.Palette.patina) {
             VStack(alignment: .leading, spacing: 10) {
@@ -153,7 +153,7 @@ struct SettingsView: View {
                 lastCheckedRow
 
                 HStack(spacing: 10) {
-                    BrassButton(title: "Check now", systemImage: "arrow.clockwise") {
+                    BrassButton(title: "立即检查", systemImage: "arrow.clockwise") {
                         Task {
                             localChecking = true
                             await downloader.checkForUpdates()
@@ -164,7 +164,7 @@ struct SettingsView: View {
                     .opacity(isChecking ? 0.55 : 1)
 
                     if shouldShowUpdateButton {
-                        GhostButton(title: "Update kernel",
+                        GhostButton(title: "更新内核",
                                     systemImage: "arrow.down.circle") {
                             Task {
                                 await downloader.updateLatest()
@@ -211,7 +211,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var installedRow: some View {
         HStack(spacing: 8) {
-            Text("Installed")
+            Text("已安装")
                 .font(.system(size: 11.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .frame(width: 110, alignment: .leading)
@@ -229,7 +229,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var latestRow: some View {
         HStack(spacing: 8) {
-            Text("Latest available")
+            Text("最新可用")
                 .font(.system(size: 11.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .frame(width: 110, alignment: .leading)
@@ -248,7 +248,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var lastCheckedRow: some View {
         HStack(spacing: 8) {
-            Text("Last checked")
+            Text("上次检查")
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .frame(width: 110, alignment: .leading)
@@ -260,7 +260,7 @@ struct SettingsView: View {
     }
 
     private var lastCheckedText: String {
-        guard let d = downloader.lastChecked else { return "never" }
+        guard let d = downloader.lastChecked else { return "从未" }
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
         return f.localizedString(for: d, relativeTo: .now)
@@ -269,7 +269,7 @@ struct SettingsView: View {
     // MARK: - Kernel binary
 
     private var kernelBinaryCard: some View {
-        ChCardWithHeader("Kernel binary",
+        ChCardWithHeader("内核二进制",
                          systemImage: "cpu",
                          iconColor: ChungHwa.Palette.patina,
                          right: { managedVersionTag }) {
@@ -286,7 +286,7 @@ struct SettingsView: View {
                         .lineLimit(2)
                         .truncationMode(.middle)
                 } else {
-                    Label("No kernel binary found", systemImage: "exclamationmark.triangle.fill")
+                    Label("未找到内核二进制", systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(ChungHwa.Palette.earth)
                 }
@@ -294,7 +294,7 @@ struct SettingsView: View {
                 downloaderProgressLine
 
                 HStack(spacing: 10) {
-                    BrassButton(title: "Update kernel", systemImage: "arrow.down.circle") {
+                    BrassButton(title: "更新内核", systemImage: "arrow.down.circle") {
                         Task {
                             await downloader.updateLatest()
                             if case .completed = downloader.state {
@@ -305,13 +305,13 @@ struct SettingsView: View {
                     .disabled(downloader.isWorking)
                     .opacity(downloader.isWorking ? 0.55 : 1)
 
-                    GhostButton(title: "Use custom binary…",
+                    GhostButton(title: "选择自定义二进制…",
                                 systemImage: "folder") {
                         pickCustomBinary()
                     }
 
                     if resolver.customPath != nil || resolver.current?.source == .managed {
-                        GhostButton(title: "Reset to bundled",
+                        GhostButton(title: "恢复内置",
                                     systemImage: "arrow.uturn.backward",
                                     tone: .destructive) {
                             try? resolver.resetToBundled()
@@ -332,7 +332,7 @@ struct SettingsView: View {
     private var managedVersionTag: some View {
         if let b = resolver.current, b.source == .managed,
            let v = resolver.managedVersion() {
-            Text("Installed \(v)")
+            Text("已安装 \(v)")
                 .font(.system(size: 10.5, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.dim)
         } else {
@@ -346,15 +346,15 @@ struct SettingsView: View {
         case .idle:
             EmptyView()
         case .fetchingMetadata:
-            progressRow("Querying GitHub releases…")
+            progressRow("查询 GitHub Releases…")
         case .downloading(let v):
-            progressRow("Downloading \(v)…")
+            progressRow("下载 \(v) 中…")
         case .extracting(let v):
-            progressRow("Extracting \(v)…")
+            progressRow("解压 \(v) 中…")
         case .installing(let v):
-            progressRow("Installing \(v)…")
+            progressRow("安装 \(v) 中…")
         case .completed(let v):
-            Label("Installed \(v)", systemImage: "checkmark.circle.fill")
+            Label("已安装 \(v)", systemImage: "checkmark.circle.fill")
                 .font(.system(size: 11.5, weight: .semibold))
                 .foregroundStyle(ChungHwa.Palette.patina)
         case .failed(let msg):
@@ -376,7 +376,7 @@ struct SettingsView: View {
 
     private func pickCustomBinary() {
         let panel = NSOpenPanel()
-        panel.title = "Select mihomo binary"
+        panel.title = "选择 mihomo 二进制"
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
@@ -390,16 +390,16 @@ struct SettingsView: View {
     // MARK: - Reset / footer
 
     private var resetCard: some View {
-        ChCardWithHeader("Storage",
+        ChCardWithHeader("存储",
                          systemImage: "folder",
                          iconColor: ChungHwa.Palette.patina) {
             HStack(spacing: 10) {
-                Text("Open the application support folder to inspect logs, configs, and the managed kernel.")
+                Text("打开 Application Support 目录以查看日志、配置和托管内核。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                GhostButton(title: "Open in Finder",
+                GhostButton(title: "在 Finder 中打开",
                             systemImage: "arrow.up.right.square") {
                     openApplicationSupport()
                 }
@@ -448,9 +448,9 @@ private struct SourceBadge: View {
 
     private var label: String {
         switch source {
-        case .bundled: return "bundled"
-        case .managed: return "managed"
-        case .custom:  return "custom"
+        case .bundled: return "内置"
+        case .managed: return "托管"
+        case .custom:  return "自定义"
         }
     }
 }
@@ -459,7 +459,7 @@ private struct SourceBadge: View {
 
 private struct NewBadge: View {
     var body: some View {
-        Text("New")
+        Text("新版")
             .font(.system(size: 10, weight: .semibold))
             .tracking(0.3)
             .textCase(.uppercase)

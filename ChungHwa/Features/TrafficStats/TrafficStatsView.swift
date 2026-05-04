@@ -48,7 +48,7 @@ struct TrafficStatsView: View {
 
     private var liveCard: some View {
         ChCardWithHeader(
-            "Live",
+            "实时",
             systemImage: "chart.line.uptrend.xyaxis",
             iconColor: ChungHwa.Palette.brass,
             right: { EmptyView() }
@@ -56,7 +56,7 @@ struct TrafficStatsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 16) {
                     liveColumn(
-                        caption: "Upload Speed",
+                        caption: "上传速度",
                         arrow: "↑",
                         bps: traffic.current?.upBps ?? 0,
                         series: traffic.samples.map { Double($0.upBps) },
@@ -65,7 +65,7 @@ struct TrafficStatsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     liveColumn(
-                        caption: "Download Speed",
+                        caption: "下载速度",
                         arrow: "↓",
                         bps: traffic.current?.downBps ?? 0,
                         series: traffic.samples.map { Double($0.downBps) },
@@ -118,13 +118,13 @@ struct TrafficStatsView: View {
 
     private var liveStrip: some View {
         HStack(spacing: 0) {
-            stripChunk(label: "Peak ↑", value: ChFormat.rate(traffic.peakUp))
+            stripChunk(label: "峰值 ↑", value: ChFormat.rate(traffic.peakUp))
             stripDot
-            stripChunk(label: "Peak ↓", value: ChFormat.rate(traffic.peakDown))
+            stripChunk(label: "峰值 ↓", value: ChFormat.rate(traffic.peakDown))
             stripDot
-            stripChunk(label: "Total ↑", value: ChFormat.bytes(traffic.totalUp))
+            stripChunk(label: "总计 ↑", value: ChFormat.bytes(traffic.totalUp))
             stripDot
-            stripChunk(label: "Total ↓", value: ChFormat.bytes(traffic.totalDown))
+            stripChunk(label: "总计 ↓", value: ChFormat.bytes(traffic.totalDown))
         }
         .font(.system(size: 11))
         .monospacedDigit()
@@ -150,7 +150,7 @@ struct TrafficStatsView: View {
 
     private var byHourCard: some View {
         ChCardWithHeader(
-            "Download by hour",
+            "按小时下载",
             systemImage: "clock",
             iconColor: ChungHwa.Palette.patina,
             right: {
@@ -172,13 +172,13 @@ struct TrafficStatsView: View {
                 softDivider
 
                 HStack {
-                    Text("Daily Avg ")
+                    Text("日均 ")
                         .foregroundStyle(ChungHwa.Palette.dim)
                     + Text(dailyAverageString)
                         .foregroundStyle(ChungHwa.Palette.text)
                         .fontWeight(.semibold)
                     Spacer()
-                    Text("Peak ")
+                    Text("峰值 ")
                         .foregroundStyle(ChungHwa.Palette.dim)
                     + Text(hourlyPeakString)
                         .foregroundStyle(ChungHwa.Palette.text)
@@ -229,7 +229,7 @@ struct TrafficStatsView: View {
 
     private var byProcessCard: some View {
         ChCardWithHeader(
-            "By Process",
+            "按进程",
             systemImage: "cpu",
             iconColor: ChungHwa.Palette.patina,
             right: { EmptyView() }
@@ -289,14 +289,14 @@ struct TrafficStatsView: View {
 
     private var memoryCard: some View {
         ChCardWithHeader(
-            "Memory & Session",
+            "内存 & 会话",
             systemImage: "memorychip",
             iconColor: ChungHwa.Palette.patina,
             right: { EmptyView() }
         ) {
             HStack(alignment: .top, spacing: 14) {
                 ChStat(
-                    label: "Kernel Memory",
+                    label: "内核内存",
                     value: traffic.memoryInUse > 0 ? ChFormat.bytes(traffic.memoryInUse) : "—",
                     systemImage: "cpu",
                     color: ChungHwa.Palette.brass
@@ -304,7 +304,7 @@ struct TrafficStatsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 ChStat(
-                    label: "Live Samples",
+                    label: "实时样本数",
                     value: "\(traffic.samples.count)",
                     systemImage: "waveform.path",
                     color: ChungHwa.Palette.brass
@@ -312,7 +312,7 @@ struct TrafficStatsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 ChStat(
-                    label: "OS Limit",
+                    label: "系统上限",
                     value: traffic.memoryLimit > 0 ? ChFormat.bytes(traffic.memoryLimit) : "—",
                     systemImage: "shippingbox",
                     color: ChungHwa.Palette.brass
@@ -329,11 +329,11 @@ struct TrafficStatsView: View {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 36))
                 .foregroundStyle(ChungHwa.Palette.faint)
-            Text("Kernel not running")
+            Text("内核未运行")
                 .font(ChungHwa.Typography.serif(18, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.text)
                 .tracking(-0.2)
-            Text("Start the kernel to see live traffic statistics.")
+            Text("启动内核以查看实时流量统计。")
                 .font(.system(size: 12))
                 .foregroundStyle(ChungHwa.Palette.dim)
         }
@@ -349,7 +349,7 @@ struct TrafficStatsView: View {
     }
 
     private var demoNote: some View {
-        Text("Demo data — historical logging coming soon")
+        Text("示例数据 —— 持久化日志稍后上线")
             .font(.system(size: 10))
             .foregroundStyle(ChungHwa.Palette.faint)
     }
