@@ -15,19 +15,23 @@ struct OverviewView: View {
                 HeroStatusCard()
                 LiveTrafficCard()
 
+                // Three short cards in one row — same intrinsic content height
+                // so the row reads as a clean band. Proxy groups goes full
+                // width below since its row count varies wildly.
                 LazyVGrid(
                     columns: [
+                        GridItem(.flexible(), spacing: 12),
                         GridItem(.flexible(), spacing: 12),
                         GridItem(.flexible(), spacing: 12),
                     ],
                     spacing: 12
                 ) {
-                    ProxyGroupsCard()
                     NetworkCard()
-
                     ResourcesCard()
                     SubscriptionHealthCard()
                 }
+
+                ProxyGroupsCard()
             }
             .padding(.vertical, 16)
             .padding(.horizontal, 18)
@@ -51,33 +55,18 @@ private func switchTab(_ tab: SidebarTab) {
 private struct HeroStatusCard: View {
     @Environment(KernelController.self) private var kernel
     @Environment(ConfigStore.self) private var configStore
-    @Environment(SystemProxyController.self) private var systemProxy
-    @Environment(AnonymousMode.self) private var anon
     @Environment(ProfileStore.self) private var profileStore
 
     var body: some View {
-        ChCard(padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 14) {
-                    statusBadge
-                    Spacer(minLength: 0)
-                    HStack(spacing: 6) {
-                        modeChip
-                        if let p = profileStore.activeProfile {
-                            profileChip(p.name)
-                        }
+        ChCard(padding: 14) {
+            HStack(alignment: .center, spacing: 14) {
+                statusBadge
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    modeChip
+                    if let p = profileStore.activeProfile {
+                        profileChip(p.name)
                     }
-                }
-
-                Rectangle()
-                    .fill(ChungHwa.Palette.lineSoft)
-                    .frame(height: 0.5)
-
-                HStack(spacing: 8) {
-                    togglePill("系统代理", on: systemProxy.enabled, symbol: "network")
-                    togglePill("匿名模式", on: anon.enabled, symbol: "eye.slash")
-                    Spacer(minLength: 0)
-                    UptimeBadge(startedAt: kernel.startedAt, isRunning: isRunning)
                 }
             }
         }
@@ -143,26 +132,6 @@ private struct HeroStatusCard: View {
         .frame(maxWidth: 220, alignment: .leading)
     }
 
-    private func togglePill(_ label: String, on: Bool, symbol: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 10, weight: .medium))
-            Image(systemName: symbol)
-                .font(.system(size: 10, weight: .medium))
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-        }
-        .foregroundStyle(on ? ChungHwa.Palette.patina : ChungHwa.Palette.faint)
-        .padding(.horizontal, 8)
-        .frame(height: 22)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(on ? ChungHwa.Palette.patina.opacity(0.10) : ChungHwa.Palette.fill)
-                .strokeBorder(on ? ChungHwa.Palette.patina.opacity(0.30) : ChungHwa.Palette.line,
-                              lineWidth: 0.5)
-        )
-    }
-
     // MARK: derived
 
     private var isRunning: Bool {
@@ -199,35 +168,6 @@ private struct HeroStatusCard: View {
         case .failed:   return ChungHwa.Palette.earth
         case .idle:     return ChungHwa.Palette.faint
         }
-    }
-}
-
-/// Drives uptime off a TimelineView so only this leaf ticks at 1Hz.
-private struct UptimeBadge: View {
-    let startedAt: Date?
-    let isRunning: Bool
-
-    var body: some View {
-        Group {
-            if isRunning, let started = startedAt {
-                TimelineView(.periodic(from: started, by: 1.0)) { ctx in
-                    label(ChFormat.uptime(since: started, now: ctx.date))
-                }
-            } else {
-                label("—")
-            }
-        }
-    }
-
-    private func label(_ text: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "clock")
-                .font(.system(size: 10))
-            Text("运行 \(text)")
-                .font(ChungHwa.Typography.mono(11, weight: .medium))
-                .monospacedDigit()
-        }
-        .foregroundStyle(ChungHwa.Palette.dim)
     }
 }
 
@@ -367,6 +307,15 @@ private struct TrafficChart: View {
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
         .chartLegend(.hidden)
+        // Force a non-degenerate y-domain so a flat 0-series still draws a
+        // baseline at the chart bottom instead of collapsing the plot area.
+        .chartYScale(domain: 0...max(1, makeMaxY()))
+    }
+
+    private func makeMaxY() -> Double {
+        let series = makeSeries()
+        let m = series.flatMap { [$0.up, $0.down] }.max() ?? 0
+        return m
     }
 
     private struct Point: Identifiable {
@@ -379,31 +328,37 @@ private struct TrafficChart: View {
     /// Range chooses the source: 1/5min slice TrafficStore.samples (1Hz, last
     /// 90 s ring), 15min derives from TrafficHistoryStore minute buckets.
     private func makeSeries() -> [Point] {
-        switch range {
-        case .oneMin:
-            let take = min(60, traffic.samples.count)
-            let slice = traffic.samples.suffix(take)
-            return slice.enumerated().map { i, s in
-                Point(idx: i, up: Double(s.upBps), down: Double(s.downBps))
+        let raw: [Point] = {
+            switch range {
+            case .oneMin:
+                let take = min(60, traffic.samples.count)
+                let slice = traffic.samples.suffix(take)
+                return slice.enumerated().map { i, s in
+                    Point(idx: i, up: Double(s.upBps), down: Double(s.downBps))
+                }
+            case .fiveMin:
+                let slice = traffic.samples
+                return slice.enumerated().map { i, s in
+                    Point(idx: i, up: Double(s.upBps), down: Double(s.downBps))
+                }
+            case .fifteenMin:
+                let cutoff = Date().addingTimeInterval(-15 * 60)
+                let buckets = historyStore.minutes.filter { $0.minuteStart >= cutoff }
+                return buckets.enumerated().map { i, b in
+                    Point(idx: i,
+                          up: Double(b.upBytes) / 60.0,
+                          down: Double(b.downBytes) / 60.0)
+                }
             }
-        case .fiveMin:
-            // We only have ~90 s of 1Hz samples; for "5分钟" we still show
-            // what we have, scaled into the chart's full width.
-            let slice = traffic.samples
-            return slice.enumerated().map { i, s in
-                Point(idx: i, up: Double(s.upBps), down: Double(s.downBps))
-            }
-        case .fifteenMin:
-            // Per-minute history → bytes per minute. Convert to a per-second
-            // rate so the y-scale is comparable to the live chart.
-            let cutoff = Date().addingTimeInterval(-15 * 60)
-            let buckets = historyStore.minutes.filter { $0.minuteStart >= cutoff }
-            return buckets.enumerated().map { i, b in
-                Point(idx: i,
-                      up: Double(b.upBytes) / 60.0,
-                      down: Double(b.downBytes) / 60.0)
-            }
+        }()
+        // Empty buffer → draw a flat 0-line across the chart width so the
+        // user sees an axis instead of blank space. Two endpoints are
+        // enough; Chart's monotone interpolation fills the rest.
+        if raw.isEmpty {
+            return [Point(idx: 0, up: 0, down: 0),
+                    Point(idx: 60, up: 0, down: 0)]
         }
+        return raw
     }
 }
 

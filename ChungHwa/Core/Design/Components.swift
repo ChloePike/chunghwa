@@ -142,37 +142,31 @@ extension ChSubStat where Value == Text {
 
 // MARK: - Dot
 
-/// Status dot with optional pulse. Pulse animates opacity, not size, so it
-/// works inline with text without disturbing line height.
-///
-/// The pulse is driven by `TimelineView(.animation)`, which SwiftUI pauses
-/// automatically when the view is off-screen or its scene is inactive — so
-/// dots in hidden tabs don't burn CPU.
+/// Status dot with optional pulse. The pulse is driven by Core Animation via
+/// `.animation(...).repeatForever`, NOT a TimelineView — TimelineView forces a
+/// SwiftUI body re-eval per frame which costs a measurable ~20% CPU app-wide
+/// even with paused-when-offscreen, because layout recomputes anyway. Core
+/// Animation handles opacity interpolation in the render server with no body
+/// re-evaluation.
 struct ChDot: View {
     var color: Color = ChungHwa.Palette.patina
     var size: CGFloat = 6
     var pulse: Bool = false
 
-    var body: some View {
-        if pulse {
-            TimelineView(.animation(minimumInterval: 0.08, paused: false)) { ctx in
-                Circle()
-                    .fill(color)
-                    .frame(width: size, height: size)
-                    .overlay(Circle().stroke(color.opacity(0.25), lineWidth: size / 2))
-                    .opacity(opacity(at: ctx.date))
-            }
-        } else {
-            Circle()
-                .fill(color)
-                .frame(width: size, height: size)
-                .overlay(Circle().stroke(color.opacity(0.25), lineWidth: size / 2))
-        }
-    }
+    @State private var pulsing = false
 
-    private func opacity(at date: Date) -> Double {
-        let t = date.timeIntervalSinceReferenceDate
-        return 0.7 + 0.3 * (cos(t * 2 * .pi / 1.6) * 0.5 + 0.5)
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .overlay(Circle().stroke(color.opacity(0.25), lineWidth: size / 2))
+            .opacity(pulse && pulsing ? 0.45 : 1.0)
+            .animation(
+                pulse ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default,
+                value: pulsing
+            )
+            .onAppear { if pulse { pulsing = true } }
+            .onChange(of: pulse) { _, on in pulsing = on }
     }
 }
 

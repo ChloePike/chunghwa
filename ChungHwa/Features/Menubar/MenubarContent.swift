@@ -15,34 +15,30 @@ struct MenubarContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Live-stat strip subscribes to TrafficStore + ConnectionsStore
-            // on its own. Extracted so 1Hz traffic ticks don't recompute
-            // the entire popover (groupSection / profileSection / etc.).
             MenubarLiveStats()
-                .padding(.top, 4)
+                .padding(.top, 2)
 
-            sectionDivider.padding(.vertical, 6)
-            quickToggleRow
-            sectionDivider.padding(.vertical, 6)
-            modeSection
             sectionDivider.padding(.vertical, 4)
-            // 直接内联——组多了让弹窗变高，但 ScrollView 在 macOS Tahoe
-            // 这套 .menuBarExtraStyle(.window) 下会把整段塌缩成 0 高度，
-            // 与其折腾不如让它自然顶高。
+            quickToggleRow
+            sectionDivider.padding(.vertical, 4)
+            modeSection
+            sectionDivider.padding(.vertical, 3)
+            // 节点组单行 + 左侧 popover；ScrollView 在 .menuBarExtraStyle(.window)
+            // 下会塌缩，所以全部直接 inline。
             groupSection
             if !proxyStore.groups.isEmpty {
-                sectionDivider.padding(.vertical, 4)
+                sectionDivider.padding(.vertical, 3)
             }
             profileSection
-            sectionDivider.padding(.vertical, 4)
+            sectionDivider.padding(.vertical, 3)
             footerSection
         }
-        .padding(8)
-        .frame(width: 280)
+        .padding(6)
+        .frame(width: 260)
         .background(.regularMaterial,
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
         )
         .task(id: kernel.apiClient == nil ? "off" : "on") {
@@ -96,23 +92,23 @@ struct MenubarContent: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 Image(systemName: symbol)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 9.5, weight: .medium))
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 10.5, weight: .medium))
                     .lineLimit(1)
             }
             .foregroundStyle(on ? ChungHwa.Palette.patina : ChungHwa.Palette.faint)
             .frame(maxWidth: .infinity)
-            .frame(height: 24)
+            .frame(height: 20)
             .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(on ? ChungHwa.Palette.patina.opacity(0.10) : ChungHwa.Palette.fill)
                     .strokeBorder(on ? ChungHwa.Palette.patina.opacity(0.30) : ChungHwa.Palette.line,
                                   lineWidth: 0.5)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -186,31 +182,21 @@ struct MenubarContent: View {
         let icon = groupIcon(for: group)
         let now = group.now ?? "—"
         if group.isUserSwitchable {
-            Menu {
-                if let members = group.all, !members.isEmpty {
-                    ForEach(members, id: \.self) { name in
-                        Button {
-                            Task {
-                                await proxyStore.select(
-                                    group: group.name,
-                                    name: name,
-                                    api: kernel.apiClient
-                                )
-                                await kernel.reload()
-                            }
-                        } label: {
-                            Label(name, systemImage: name == group.now ? "checkmark" : "")
-                        }
+            // Popover instead of Menu — Menu inside .menuBarExtraStyle(.window)
+            // expands the popup downward; popover with arrowEdge .leading
+            // floats out the LEFT side of the menubar item (where there's
+            // actual screen space), which is the standard cascade direction.
+            GroupPickerRow(
+                group: group,
+                icon: icon,
+                now: now,
+                onSelect: { name in
+                    Task {
+                        await proxyStore.select(group: group.name, name: name, api: kernel.apiClient)
+                        await kernel.reload()
                     }
-                } else {
-                    Text("（无节点）")
                 }
-            } label: {
-                MenubarRowLabel(icon: icon, title: group.name, trailing: now, showsChevron: true)
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
+            )
         } else {
             MenubarRowLabel(icon: icon, title: group.name, trailing: now, showsChevron: false)
         }
@@ -230,33 +216,14 @@ struct MenubarContent: View {
     // MARK: - Profile section
 
     private var profileSection: some View {
-        Menu {
-            if profileStore.profiles.isEmpty {
-                Text("（暂无配置）")
-            } else {
-                ForEach(profileStore.profiles) { p in
-                    Button {
-                        profileStore.activate(p.id)
-                        Task { await kernel.reload() }
-                    } label: {
-                        Label(
-                            p.name,
-                            systemImage: profileStore.activeProfileID == p.id ? "checkmark" : ""
-                        )
-                    }
-                }
+        ProfilePickerRow(
+            profiles: profileStore.profiles,
+            activeID: profileStore.activeProfileID,
+            onSelect: { id in
+                profileStore.activate(id)
+                Task { await kernel.reload() }
             }
-        } label: {
-            MenubarRowLabel(
-                icon: "doc.text",
-                title: "切换配置",
-                trailing: profileStore.activeProfile?.name ?? "—",
-                showsChevron: true
-            )
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
+        )
     }
 
     // MARK: - Footer section
@@ -363,37 +330,192 @@ private struct MenubarRowLabel: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 7) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.system(size: 11.5))
                 .foregroundStyle(tint ?? ChungHwa.Palette.dim)
-                .frame(width: 16, alignment: .center)
+                .frame(width: 14, alignment: .center)
             Text(title)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(tint ?? ChungHwa.Palette.text)
                 .lineLimit(1)
             Spacer(minLength: 6)
             if let trailing, !trailing.isEmpty {
                 Text(trailing)
-                    .font(.system(size: 11.5))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             if showsChevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 8.5, weight: .semibold))
                     .foregroundStyle(ChungHwa.Palette.faint)
             }
         }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
+        .padding(.horizontal, 7)
+        .frame(height: 22)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
                 .fill(hovering ? ChungHwa.Palette.fill : Color.clear)
         )
+        .onHover { hovering = $0 }
+    }
+}
+
+// MARK: - Picker rows (left-side popovers)
+
+/// Tappable row for a switchable proxy group. Click → popover slides out the
+/// LEFT edge with a scrollable node list. The popover is its own NSPanel so
+/// internal ScrollView works (unlike the parent .menuBarExtraStyle(.window)).
+private struct GroupPickerRow: View {
+    let group: MihomoProxy
+    let icon: String
+    let now: String
+    let onSelect: (String) -> Void
+
+    @State private var presented = false
+
+    var body: some View {
+        Button { presented = true } label: {
+            MenubarRowLabel(icon: icon, title: group.name, trailing: now, showsChevron: true)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $presented, arrowEdge: .leading) {
+            NodeListPopover(
+                names: group.all ?? [],
+                activeName: group.now
+            ) { name in
+                onSelect(name)
+                presented = false
+            }
+        }
+    }
+}
+
+/// Tappable row that swaps the active profile.
+private struct ProfilePickerRow: View {
+    let profiles: [Profile]
+    let activeID: UUID?
+    let onSelect: (UUID) -> Void
+
+    @State private var presented = false
+
+    var body: some View {
+        Button { presented = true } label: {
+            MenubarRowLabel(
+                icon: "doc.text",
+                title: "切换配置",
+                trailing: profiles.first(where: { $0.id == activeID })?.name ?? "—",
+                showsChevron: true
+            )
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $presented, arrowEdge: .leading) {
+            ProfileListPopover(
+                profiles: profiles,
+                activeID: activeID
+            ) { id in
+                onSelect(id)
+                presented = false
+            }
+        }
+    }
+}
+
+private struct NodeListPopover: View {
+    let names: [String]
+    let activeName: String?
+    let onTap: (String) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                if names.isEmpty {
+                    Text("（无节点）")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(ChungHwa.Palette.dim)
+                        .padding(.vertical, 10)
+                } else {
+                    ForEach(names, id: \.self) { name in
+                        PickerRow(
+                            label: name,
+                            isActive: name == activeName,
+                            action: { onTap(name) }
+                        )
+                    }
+                }
+            }
+            .padding(4)
+        }
+        .frame(width: 240)
+        .frame(minHeight: 36, maxHeight: 380)
+    }
+}
+
+private struct ProfileListPopover: View {
+    let profiles: [Profile]
+    let activeID: UUID?
+    let onTap: (UUID) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                if profiles.isEmpty {
+                    Text("（暂无配置）")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(ChungHwa.Palette.dim)
+                        .padding(.vertical, 10)
+                } else {
+                    ForEach(profiles) { p in
+                        PickerRow(
+                            label: p.name,
+                            isActive: p.id == activeID,
+                            action: { onTap(p.id) }
+                        )
+                    }
+                }
+            }
+            .padding(4)
+        }
+        .frame(width: 240)
+        .frame(minHeight: 36, maxHeight: 320)
+    }
+}
+
+private struct PickerRow: View {
+    let label: String
+    let isActive: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: isActive ? "checkmark" : "")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(ChungHwa.Palette.brass)
+                    .frame(width: 12, alignment: .center)
+                Text(label)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 6)
+            .frame(height: 22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(hovering ? ChungHwa.Palette.fill : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
         .onHover { hovering = $0 }
     }
 }

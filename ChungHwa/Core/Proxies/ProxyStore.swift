@@ -21,7 +21,25 @@ final class ProxyStore {
     /// rows while this is non-empty.
     private(set) var testingGroups: Set<String> = []
 
+    /// Persisted last-known delay per proxy name, keyed at the moment of
+    /// each test. mihomo throws this away on every kernel restart, so we
+    /// keep it on disk and merge it into the snapshot until a fresh test
+    /// arrives. 0 = timeout (still useful — keeps "—" out of the UI when
+    /// the server has nothing else to say).
+    private var persistedDelays: [String: PersistedDelay] = [:]
+
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "proxies")
+
+    private static let persistedDelaysURL: URL = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ChungHwa", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("proxy-delays.json")
+    }()
+
+    init() {
+        loadPersistedDelays()
+    }
 
     func reset() {
         snapshotProxies = [:]
@@ -40,8 +58,8 @@ final class ProxyStore {
         defer { isRefreshing = false }
         do {
             let snap = try await api.proxies()
-            snapshotProxies = snap.proxies
-            groupOrder = computeGroupOrder(in: snap.proxies)
+            snapshotProxies = mergePersistedDelays(into: snap.proxies)
+            groupOrder = computeGroupOrder(in: snapshotProxies)
             lastError = nil
             log.debug("refreshed \(snap.proxies.count, privacy: .public) proxies, \(self.groupOrder.count, privacy: .public) groups")
         } catch {
@@ -78,6 +96,7 @@ final class ProxyStore {
         do {
             let results = try await api.groupDelay(group: group)
             let now = ISO8601DateFormatter().string(from: Date())
+            let nowDate = Date()
             for (name, ms) in results {
                 guard var p = snapshotProxies[name] else { continue }
                 let sample = MihomoProxy.DelaySample(time: now, delay: ms)
@@ -85,6 +104,7 @@ final class ProxyStore {
                 p = MihomoProxy(name: p.name, type: p.type, now: p.now,
                                 all: p.all, history: history, udp: p.udp)
                 snapshotProxies[name] = p
+                persistedDelays[name] = PersistedDelay(delay: ms, testedAt: nowDate)
             }
             // Members not present in the response timed out — record a 0
             // sample so the badge shows "—" instead of stale latency.
@@ -96,14 +116,55 @@ final class ProxyStore {
                     p = MihomoProxy(name: p.name, type: p.type, now: p.now,
                                     all: p.all, history: history, udp: p.udp)
                     snapshotProxies[name] = p
+                    persistedDelays[name] = PersistedDelay(delay: 0, testedAt: nowDate)
                 }
             }
+            savePersistedDelays()
             lastError = nil
             log.debug("group delay \(group, privacy: .public): \(results.count, privacy: .public) responses")
         } catch {
             lastError = String(describing: error)
             log.error("group delay \(group, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
         }
+    }
+
+    // MARK: - Persistence
+
+    private struct PersistedDelay: Codable {
+        let delay: Int
+        let testedAt: Date
+    }
+
+    private func mergePersistedDelays(into proxies: [String: MihomoProxy]) -> [String: MihomoProxy] {
+        var out = proxies
+        for (name, persisted) in persistedDelays {
+            guard var p = out[name] else { continue }
+            // mihomo's own history is authoritative when present (it ran a
+            // test more recently than us). Only fill in when empty.
+            if (p.history ?? []).isEmpty {
+                let sample = MihomoProxy.DelaySample(
+                    time: ISO8601DateFormatter().string(from: persisted.testedAt),
+                    delay: persisted.delay
+                )
+                p = MihomoProxy(name: p.name, type: p.type, now: p.now,
+                                all: p.all, history: [sample], udp: p.udp)
+                out[name] = p
+            }
+        }
+        return out
+    }
+
+    private func loadPersistedDelays() {
+        guard let data = try? Data(contentsOf: Self.persistedDelaysURL) else { return }
+        guard let decoded = try? JSONDecoder().decode([String: PersistedDelay].self, from: data) else { return }
+        persistedDelays = decoded
+        log.debug("loaded \(decoded.count, privacy: .public) persisted delays")
+    }
+
+    private func savePersistedDelays() {
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(persistedDelays) else { return }
+        try? data.write(to: Self.persistedDelaysURL, options: .atomic)
     }
 
     var groups: [MihomoProxy] {
