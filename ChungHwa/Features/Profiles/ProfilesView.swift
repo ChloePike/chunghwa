@@ -14,6 +14,7 @@ struct ProfilesView: View {
     @State private var pendingDelete: Profile?
     @State private var importError: String?
     @State private var isTargeted = false
+    @State private var inspecting: Profile?
 
     var body: some View {
         ScrollView {
@@ -38,6 +39,7 @@ struct ProfilesView: View {
                                 onRefresh: {
                                     Task { try? await store.refresh(profile.id) }
                                 },
+                                onInspect: { inspecting = profile },
                                 onRequestDelete: { pendingDelete = profile }
                             )
                         }
@@ -65,6 +67,14 @@ struct ProfilesView: View {
                 urlName: $urlName,
                 onCancel: { closeImportURL() },
                 onSubmit: submitImportURL
+            )
+        }
+        .sheet(item: $inspecting) { profile in
+            YAMLInspectorSheet(
+                profile: profile,
+                yaml: store.yamlContent(for: profile.id),
+                yamlURL: store.yamlURL(for: profile.id),
+                onClose: { inspecting = nil }
             )
         }
         .alert(
@@ -418,6 +428,7 @@ private struct ProfileCard: View {
     let isActive: Bool
     let onActivate: () -> Void
     let onRefresh: () -> Void
+    let onInspect: () -> Void
     let onRequestDelete: () -> Void
 
     var body: some View {
@@ -535,11 +546,48 @@ private struct ProfileCard: View {
                                 help: "Refresh subscription",
                                 action: onRefresh)
             }
+            GhostMiniButton(title: "View",
+                            systemImage: "doc.text.magnifyingglass",
+                            help: "View YAML",
+                            action: onInspect)
             IconBadgeButton(systemImage: "trash",
                             tint: ChungHwa.Palette.earth,
                             help: "Remove profile",
                             action: onRequestDelete)
         }
+    }
+}
+
+// MARK: - View YAML mini-button
+
+private struct GhostMiniButton: View {
+    let title: String
+    let systemImage: String
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 9.5, weight: .medium))
+                Text(title)
+                    .font(.system(size: 11.5, weight: .medium))
+            }
+            .foregroundStyle(ChungHwa.Palette.text)
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(ChungHwa.Palette.pillBg)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }
 
@@ -749,5 +797,403 @@ private struct RelativeDateText: View {
             let y = s / (86_400 * 365)
             return "\(y) year\(y == 1 ? "" : "s") ago"
         }
+    }
+}
+
+// MARK: - YAML inspector sheet
+
+private struct YAMLInspectorSheet: View {
+    let profile: Profile
+    let yaml: String?
+    let yamlURL: URL
+    let onClose: () -> Void
+
+    @State private var copyHint: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            titleBar
+            Divider().background(ChungHwa.Palette.lineSoft)
+            sourceLine
+            bodyArea
+            footerLine
+            Divider().background(ChungHwa.Palette.lineSoft)
+            bottomButtons
+        }
+        .frame(minWidth: 720, idealWidth: 720, minHeight: 600, idealHeight: 600)
+        .background(ChungHwa.Palette.card)
+    }
+
+    // MARK: title
+
+    private var titleBar: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(profile.name)
+                .font(ChungHwa.Typography.serif(18, weight: .semibold))
+                .foregroundStyle(ChungHwa.Palette.text)
+                .tracking(-0.2)
+            Spacer(minLength: 8)
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(ChungHwa.Palette.pillBg)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+                    )
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)
+            .help("Close")
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: source line
+
+    private var sourceLine: some View {
+        HStack(spacing: 6) {
+            Text(sourceTag)
+                .font(ChungHwa.Typography.mono(11))
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(
+                    Capsule().fill(ChungHwa.Palette.fill)
+                )
+                .overlay(
+                    Capsule().strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
+                )
+            Spacer(minLength: 0)
+            if let copyHint {
+                Text(copyHint)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.patina)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+    }
+
+    private var sourceTag: String {
+        switch profile.source {
+        case .file:
+            return "FILE"
+        case .url(let url):
+            return "URL: \(url.host ?? url.absoluteString)"
+        }
+    }
+
+    // MARK: body
+
+    @ViewBuilder
+    private var bodyArea: some View {
+        if let yaml {
+            ScrollView([.vertical, .horizontal]) {
+                Text(YAMLHighlighter.highlight(yaml))
+                    .textSelection(.enabled)
+                    .font(ChungHwa.Typography.mono(11))
+                    .lineSpacing(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+            }
+            .background(ChungHwa.Palette.cardSoft)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
+            )
+            .padding(.horizontal, 18)
+        } else {
+            ScrollView {
+                Text("No content found at \(yamlURL.path)")
+                    .font(ChungHwa.Typography.mono(11))
+                    .foregroundStyle(ChungHwa.Palette.earth)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+            }
+            .background(ChungHwa.Palette.cardSoft)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
+            )
+            .padding(.horizontal, 18)
+        }
+    }
+
+    // MARK: footer
+
+    private var footerLine: some View {
+        HStack(spacing: 10) {
+            if let yaml {
+                Text("\(yaml.utf8.count) bytes")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .monospacedDigit()
+                Text("·")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+                Text("\(lineCount(yaml)) lines")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .monospacedDigit()
+            } else {
+                Text("0 bytes · 0 lines")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+    }
+
+    private func lineCount(_ s: String) -> Int {
+        if s.isEmpty { return 0 }
+        var n = 1
+        for c in s where c == "\n" { n += 1 }
+        // Don't count a trailing newline as an extra empty line.
+        if s.hasSuffix("\n") { n -= 1 }
+        return max(n, 1)
+    }
+
+    // MARK: bottom buttons
+
+    private var bottomButtons: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            if case .file = profile.source {
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([yamlURL])
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 10.5, weight: .medium))
+                        Text("Reveal in Finder")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(ChungHwa.Palette.text)
+                    .padding(.horizontal, 11)
+                    .frame(height: 26)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(ChungHwa.Palette.pillBg)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            Button {
+                guard let yaml else { return }
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(yaml, forType: .string)
+                withAnimation { copyHint = "Copied" }
+                Task {
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    withAnimation { copyHint = nil }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 10.5, weight: .semibold))
+                    Text("Copy to clipboard")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(ChungHwa.Palette.ink)
+                .padding(.horizontal, 11)
+                .frame(height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(ChungHwa.Palette.brass)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(ChungHwa.Palette.brassDark.opacity(0.55), lineWidth: 0.5)
+                )
+                .shadow(color: ChungHwa.Palette.brassDark.opacity(0.20), radius: 1, y: 1)
+            }
+            .buttonStyle(.plain)
+            .disabled(yaml == nil)
+            .opacity(yaml == nil ? 0.5 : 1)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Cheap YAML syntax highlighter
+
+private enum YAMLHighlighter {
+    /// Per-line scan, no real parser. Light coloring only:
+    /// - comments (`# ...`) → faint
+    /// - top-level keys (`^([\w-]+)\s*:` no leading indent) → brass
+    /// - quoted string values → patina
+    /// - anchors / aliases (`&name`, `*name`) → earth
+    /// - everything else → text
+    static func highlight(_ yaml: String) -> AttributedString {
+        var out = AttributedString("")
+        let lines = yaml.split(separator: "\n", omittingEmptySubsequences: false)
+        for (idx, line) in lines.enumerated() {
+            out.append(highlight(line: String(line)))
+            if idx < lines.count - 1 {
+                var nl = AttributedString("\n")
+                nl.foregroundColor = ChungHwa.Palette.text
+                out.append(nl)
+            }
+        }
+        return out
+    }
+
+    private static func highlight(line raw: String) -> AttributedString {
+        // Empty line: emit as text-colored empty.
+        if raw.isEmpty {
+            var s = AttributedString("")
+            s.foregroundColor = ChungHwa.Palette.text
+            return s
+        }
+
+        // Whole-line comment (after optional whitespace).
+        let trimmed = raw.drop(while: { $0 == " " || $0 == "\t" })
+        if trimmed.first == "#" {
+            var s = AttributedString(raw)
+            s.foregroundColor = ChungHwa.Palette.faint
+            return s
+        }
+
+        // Top-level key: starts at column 0 with `[\w-]+` then `:`.
+        if let colonIdx = topLevelKeyColonIndex(raw) {
+            var out = AttributedString("")
+            let keyPart = String(raw[..<colonIdx]) + ":"
+            var keyAttr = AttributedString(keyPart)
+            keyAttr.foregroundColor = ChungHwa.Palette.brass
+            out.append(keyAttr)
+            let afterColon = raw.index(after: colonIdx)
+            if afterColon < raw.endIndex {
+                let rest = String(raw[afterColon...])
+                out.append(colorizeValue(rest))
+            }
+            return out
+        }
+
+        return colorizeValue(raw)
+    }
+
+    /// If `line` starts at column 0 with a `[\w-]+` identifier followed by `:`,
+    /// return the index of that colon; otherwise nil.
+    private static func topLevelKeyColonIndex(_ line: String) -> String.Index? {
+        guard let first = line.first, !first.isWhitespace else { return nil }
+        var i = line.startIndex
+        var sawAny = false
+        while i < line.endIndex {
+            let c = line[i]
+            if c.isLetter || c.isNumber || c == "_" || c == "-" {
+                sawAny = true
+                i = line.index(after: i)
+            } else {
+                break
+            }
+        }
+        guard sawAny, i < line.endIndex, line[i] == ":" else { return nil }
+        return i
+    }
+
+    /// Colorize an arbitrary value-region: handles quoted strings and
+    /// anchors/aliases; everything else is default text color.
+    private static func colorizeValue(_ s: String) -> AttributedString {
+        var out = AttributedString("")
+        var i = s.startIndex
+        var pending = ""
+
+        func flushPending() {
+            guard !pending.isEmpty else { return }
+            var a = AttributedString(pending)
+            a.foregroundColor = ChungHwa.Palette.text
+            out.append(a)
+            pending = ""
+        }
+
+        while i < s.endIndex {
+            let c = s[i]
+
+            // Inline comment from `#` to end of line — only when preceded by
+            // whitespace or start; cheap heuristic.
+            if c == "#", (i == s.startIndex || s[s.index(before: i)].isWhitespace) {
+                flushPending()
+                let rest = String(s[i...])
+                var a = AttributedString(rest)
+                a.foregroundColor = ChungHwa.Palette.faint
+                out.append(a)
+                return out
+            }
+
+            // Quoted strings: " ... " or ' ... '
+            if c == "\"" || c == "'" {
+                flushPending()
+                let quote = c
+                let start = i
+                var j = s.index(after: i)
+                while j < s.endIndex {
+                    let cc = s[j]
+                    if cc == "\\", s.index(after: j) < s.endIndex {
+                        j = s.index(j, offsetBy: 2)
+                        continue
+                    }
+                    if cc == quote {
+                        j = s.index(after: j)
+                        break
+                    }
+                    j = s.index(after: j)
+                }
+                let segment = String(s[start..<j])
+                var a = AttributedString(segment)
+                a.foregroundColor = ChungHwa.Palette.patina
+                out.append(a)
+                i = j
+                continue
+            }
+
+            // Anchors/aliases: & or * followed by name chars.
+            if (c == "&" || c == "*"),
+               (i == s.startIndex || s[s.index(before: i)].isWhitespace) {
+                let next = s.index(after: i)
+                if next < s.endIndex {
+                    let nc = s[next]
+                    if nc.isLetter || nc.isNumber || nc == "_" || nc == "-" {
+                        flushPending()
+                        let start = i
+                        var j = next
+                        while j < s.endIndex {
+                            let cc = s[j]
+                            if cc.isLetter || cc.isNumber || cc == "_" || cc == "-" {
+                                j = s.index(after: j)
+                            } else { break }
+                        }
+                        let segment = String(s[start..<j])
+                        var a = AttributedString(segment)
+                        a.foregroundColor = ChungHwa.Palette.earth
+                        out.append(a)
+                        i = j
+                        continue
+                    }
+                }
+            }
+
+            pending.append(c)
+            i = s.index(after: i)
+        }
+
+        flushPending()
+        return out
     }
 }
