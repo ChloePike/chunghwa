@@ -15,12 +15,11 @@ struct MenubarContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             // Live-stat strip subscribes to TrafficStore + ConnectionsStore
             // on its own. Extracted so 1Hz traffic ticks don't recompute
             // the entire popover (groupSection / profileSection / etc.).
             MenubarLiveStats()
-                .padding(.top, 8)
+                .padding(.top, 4)
 
             sectionDivider.padding(.vertical, 6)
             modeSection
@@ -52,67 +51,6 @@ struct MenubarContent: View {
             guard kernel.apiClient != nil else { return }
             await proxyStore.refresh(api: kernel.apiClient)
             await config.refresh(api: kernel.apiClient)
-        }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            Text(statusSubtitle)
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(ChungHwa.Palette.text)
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-
-            HStack(spacing: 5) {
-                ChDot(color: statusColor, size: 7, pulse: pulses)
-                Text(statusLabel)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(statusColor)
-            }
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-    }
-
-    private var activeProfileName: String {
-        profileStore.profiles.first(where: { $0.id == profileStore.activeProfileID })?.name
-            ?? "无配置"
-    }
-
-    private var statusLabel: String {
-        switch kernel.status {
-        case .running:  return "运行中"
-        case .starting: return "启动中"
-        case .failed:   return "失败"
-        case .idle:     return "空闲"
-        }
-    }
-
-    private var statusSubtitle: String {
-        switch kernel.status {
-        case .running(let v): return "mihomo \(v)"
-        case .starting:       return "正在拉起内核"
-        case .failed(let r):  return r.isEmpty ? "内核启动失败" : r
-        case .idle:           return "内核未运行"
-        }
-    }
-
-    private var statusColor: Color {
-        switch kernel.status {
-        case .running:  return ChungHwa.Palette.patina
-        case .starting: return ChungHwa.Palette.brass
-        case .failed:   return ChungHwa.Palette.earth
-        case .idle:     return ChungHwa.Palette.dim
-        }
-    }
-
-    private var pulses: Bool {
-        switch kernel.status {
-        case .running, .starting: return true
-        default: return false
         }
     }
 
