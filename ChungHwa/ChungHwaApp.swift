@@ -21,6 +21,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.configStore)
                 .environment(appDelegate.ruleStore)
                 .environment(appDelegate.anonymousMode)
+                .environment(appDelegate.loginItem)
         }
 
         MenuBarExtra {
@@ -55,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let ruleStore: RuleStore
     let anonymousMode: AnonymousMode
     let kernel: KernelController
+    let loginItem: LoginItemController
 
     override init() {
         let resolver = KernelBinaryResolver()
@@ -89,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             connectionsStore: connectionsStore,
             configStore: configStore
         )
+        self.loginItem = LoginItemController()
         super.init()
     }
 
@@ -99,5 +102,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         if systemProxy.enabled { systemProxy.disable() }
         kernel.stop()
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        let key = "ChungHwa.CloseKeepsRunning"
+        let keepsRunning: Bool = UserDefaults.standard.object(forKey: key) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: key)
+        return !keepsRunning
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows {
+            for w in NSApp.windows where w.canBecomeKey {
+                w.makeKeyAndOrderFront(nil)
+                return true
+            }
+            // No window — synthesize one. WindowGroup will recreate on activation.
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        return true
     }
 }

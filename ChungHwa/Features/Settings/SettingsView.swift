@@ -10,11 +10,14 @@ struct SettingsView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(KernelBinaryResolver.self) private var resolver
     @Environment(KernelDownloader.self) private var downloader
+    @Environment(LoginItemController.self) private var loginItem
+    @AppStorage("ChungHwa.CloseKeepsRunning") private var closeKeepsRunning: Bool = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 aboutCard
+                startupCard
                 kernelBinaryCard
                 resetCard
                 Color.clear.frame(height: 12)
@@ -73,6 +76,48 @@ struct SettingsView: View {
 
     private static var buildVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+    }
+
+    // MARK: - Startup
+
+    private var startupCard: some View {
+        ChCardWithHeader("Startup",
+                         systemImage: "power",
+                         iconColor: ChungHwa.Palette.brass) {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(isOn: Binding(
+                        get: { loginItem.isRegistered },
+                        set: { loginItem.setEnabled($0) }
+                    )) {
+                        Text("Launch at login")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(ChungHwa.Palette.text)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+
+                    if let err = loginItem.lastError {
+                        Text(err)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.red)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Toggle(isOn: $closeKeepsRunning) {
+                    Text("Close window keeps app running")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(ChungHwa.Palette.text)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 2)
+            .padding(.bottom, 4)
+        }
     }
 
     // MARK: - Kernel binary
