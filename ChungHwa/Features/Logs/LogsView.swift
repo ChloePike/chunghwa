@@ -1,156 +1,210 @@
 import SwiftUI
 
-private enum LogFilter: String, CaseIterable, Identifiable {
-    case all
-    case errors
-    case process
-    case runtime
+private enum LogLevelFilter: String, CaseIterable, Identifiable {
+    case all, info, warn, error
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .all:     return "All"
-        case .errors:  return "Errors"
-        case .process: return "Process"
-        case .runtime: return "Runtime"
+        case .all:   return "All"
+        case .info:  return "Info"
+        case .warn:  return "Warn"
+        case .error: return "Error"
         }
     }
 
     func includes(_ stream: LogStream) -> Bool {
         switch self {
-        case .all: return true
-        case .errors:
-            return stream == .stderr || stream == .error || stream == .warning
-        case .process:
-            return stream.isProcessPipe
-        case .runtime:
-            return !stream.isProcessPipe
+        case .all:
+            return true
+        case .info:
+            return stream == .info || stream == .debug || stream == .stdout
+        case .warn:
+            return stream == .warning
+        case .error:
+            return stream == .error || stream == .stderr
         }
     }
 }
 
 struct LogsView: View {
     @Environment(LogStore.self) private var store
-    @State private var follow = true
-    @State private var filter: LogFilter = .all
+    @State private var filter: LogLevelFilter = .all
+    @State private var paused = false
+    @State private var frozenLines: [LogLine] = []
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            content
+        VStack(alignment: .leading, spacing: 10) {
+            toolbar
+            ChCard(padding: 0) {
+                logScroll
+            }
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(ChungHwa.Palette.bg.ignoresSafeArea())
         .navigationTitle("Logs")
     }
 
-    private var visibleLines: [LogLine] {
-        guard filter != .all else { return store.lines }
-        return store.lines.filter { filter.includes($0.stream) }
+    // MARK: - Source
+
+    private var sourceLines: [LogLine] {
+        paused ? frozenLines : store.lines
     }
 
-    private var header: some View {
-        HStack(spacing: 12) {
-            Picker("", selection: $filter) {
-                ForEach(LogFilter.allCases) { f in
-                    Text(f.label).tag(f)
+    private var visibleLines: [LogLine] {
+        guard filter != .all else { return sourceLines }
+        return sourceLines.filter { filter.includes($0.stream) }
+    }
+
+    // MARK: - Toolbar
+
+    private var toolbar: some View {
+        HStack(spacing: 10) {
+            ChSeg(
+                value: filter,
+                onChange: { filter = $0 },
+                options: LogLevelFilter.allCases.map { ($0, $0.label) }
+            )
+
+            Spacer(minLength: 0)
+
+            Text("\(visibleLines.count) / \(sourceLines.count) lines")
+                .font(ChungHwa.Typography.mono(11))
+                .foregroundStyle(ChungHwa.Palette.faint)
+                .monospacedDigit()
+
+            ChPill(active: paused, action: togglePause) {
+                HStack(spacing: 4) {
+                    Image(systemName: paused ? "play.fill" : "pause.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text(paused ? "Resume" : "Pause")
                 }
             }
-            .pickerStyle(.segmented)
-            .fixedSize()
-            Toggle("Follow", isOn: $follow)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-            Spacer()
-            Text("\(visibleLines.count) / \(store.lines.count) lines")
-                .font(.caption).foregroundStyle(.secondary)
-                .monospacedDigit()
-            Button("Clear") { store.clear() }
+
+            ChPill(active: false, action: clearLogs) {
+                HStack(spacing: 4) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("Clear")
+                }
+            }
         }
-        .padding(.horizontal, 16).padding(.vertical, 8)
     }
 
-    @ViewBuilder
-    private var content: some View {
-        if store.lines.isEmpty {
-            ContentUnavailableView("No log output yet",
-                                   systemImage: "terminal",
-                                   description: Text("mihomo runtime events and stdout/stderr appear here once the kernel starts."))
-        } else {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 1) {
-                        ForEach(visibleLines) { line in
-                            LogRow(line: line).id(line.id)
-                        }
+    // MARK: - Scroll
+
+    private var logScroll: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(visibleLines) { line in
+                        LogRow(line: line)
+                            .id(line.id)
                     }
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .onChange(of: store.lines.count) {
-                    guard follow, let last = visibleLines.last else { return }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(ChungHwa.Palette.cardSoft)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onChange(of: store.lines.count) {
+                guard !paused, let last = visibleLines.last else { return }
+                withAnimation(.linear(duration: 0.12)) {
                     proxy.scrollTo(last.id, anchor: .bottom)
                 }
-                .onChange(of: filter) {
-                    if let last = visibleLines.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
-                }
-                .onAppear {
-                    if let last = visibleLines.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+            }
+            .onChange(of: filter) {
+                if let last = visibleLines.last {
+                    proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
+            .onChange(of: paused) { _, nowPaused in
+                if !nowPaused, let last = store.lines.last {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
+            .onAppear {
+                if let last = visibleLines.last {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func togglePause() {
+        if paused {
+            paused = false
+            frozenLines = []
+        } else {
+            frozenLines = store.lines
+            paused = true
+        }
+    }
+
+    private func clearLogs() {
+        store.clear()
+        if paused {
+            frozenLines = []
         }
     }
 }
+
+// MARK: - Row
 
 private struct LogRow: View {
     let line: LogLine
 
     private static let formatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "HH:mm:ss.SSS"
+        f.dateFormat = "HH:mm:ss"
         return f
     }()
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(Self.formatter.string(from: line.date))
-                .foregroundStyle(.tertiary)
-                .frame(width: 92, alignment: .leading)
-            Text(glyph)
-                .foregroundStyle(color)
-                .frame(width: 14, alignment: .center)
+                .font(ChungHwa.Typography.mono(11))
+                .foregroundStyle(ChungHwa.Palette.faint)
+
+            Text(levelLabel)
+                .font(ChungHwa.Typography.mono(11, weight: .semibold))
+                .foregroundStyle(levelColor)
+                .frame(width: 44, alignment: .leading)
+
             Text(line.text)
-                .foregroundStyle(.primary)
+                .font(ChungHwa.Typography.mono(11))
+                .foregroundStyle(ChungHwa.Palette.text)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(.system(.caption, design: .monospaced))
-        .padding(.horizontal, 16)
+        .lineSpacing(4)
+        .padding(.vertical, 1)
     }
 
-    private var glyph: String {
+    private var levelLabel: String {
         switch line.stream {
-        case .stdout:  return "·"
-        case .stderr:  return "!"
-        case .debug:   return "D"
-        case .info:    return "I"
-        case .warning: return "W"
-        case .error:   return "E"
+        case .stdout:  return "OUT"
+        case .stderr:  return "ERR"
+        case .debug:   return "DEBUG"
+        case .info:    return "INFO"
+        case .warning: return "WARN"
+        case .error:   return "ERROR"
         }
     }
 
-    private var color: Color {
+    private var levelColor: Color {
         switch line.stream {
-        case .stdout:  return .secondary
-        case .stderr:  return .red
-        case .debug:   return .secondary
-        case .info:    return .blue
-        case .warning: return .orange
-        case .error:   return .red
+        case .info:    return ChungHwa.Palette.patina
+        case .warning: return ChungHwa.Palette.brass
+        case .error:   return ChungHwa.Palette.earth
+        case .debug:   return ChungHwa.Palette.faint
+        case .stdout, .stderr: return ChungHwa.Palette.dim
         }
     }
 }
