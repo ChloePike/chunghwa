@@ -46,6 +46,7 @@ final class KernelController {
     private let historyStore: TrafficHistoryStore
     private let connectionsStore: ConnectionsStore
     private let configStore: ConfigStore
+    private let notificationCenterStore: NotificationCenterStore
     private let dataDir: URL
     private let configFile: URL
 
@@ -55,7 +56,8 @@ final class KernelController {
          trafficStore: TrafficStore,
          historyStore: TrafficHistoryStore,
          connectionsStore: ConnectionsStore,
-         configStore: ConfigStore) {
+         configStore: ConfigStore,
+         notificationCenterStore: NotificationCenterStore) {
         self.resolver = resolver
         self.logStore = logStore
         self.profileStore = profileStore
@@ -63,6 +65,7 @@ final class KernelController {
         self.historyStore = historyStore
         self.connectionsStore = connectionsStore
         self.configStore = configStore
+        self.notificationCenterStore = notificationCenterStore
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.dataDir = appSupport
@@ -254,6 +257,7 @@ final class KernelController {
 
     private func startLogStream(_ stream: MihomoStreamClient) -> Task<Void, Never> {
         let store = self.logStore
+        let notifications = self.notificationCenterStore
         return Task {
             for await event in await stream.logEvents(level: "debug") {
                 let mapped: LogStream = switch event.type.lowercased() {
@@ -263,6 +267,14 @@ final class KernelController {
                 default:        .info
                 }
                 store.append(event.payload, stream: mapped)
+                if mapped == .warning || mapped == .error {
+                    let trimmed = String(event.payload.prefix(200))
+                    notifications.post(
+                        source: "mihomo",
+                        level: mapped == .error ? .error : .warning,
+                        message: trimmed
+                    )
+                }
             }
         }
     }

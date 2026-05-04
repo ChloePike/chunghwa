@@ -414,6 +414,7 @@ private struct StatusBar: View {
     let configStore = ConfigStore()
     let ruleStore = RuleStore()
     let proxyProviderStore = ProxyProviderStore()
+    let notificationCenterStore = NotificationCenterStore()
     return ContentView()
         .environment(KernelController(
             resolver: resolver,
@@ -422,7 +423,8 @@ private struct StatusBar: View {
             trafficStore: trafficStore,
             historyStore: historyStore,
             connectionsStore: connectionsStore,
-            configStore: configStore))
+            configStore: configStore,
+            notificationCenterStore: notificationCenterStore))
         .environment(resolver)
         .environment(KernelDownloader(resolver: resolver))
         .environment(logStore)
@@ -436,5 +438,5 @@ private struct StatusBar: View {
         .environment(ruleStore)
         .environment(proxyProviderStore)
         .environment(AnonymousMode())
-        .environment(NotificationCenterStore())
+        .environment(notificationCenterStore)
 }

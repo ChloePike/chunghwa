@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let ruleStore = RuleStore()
         let proxyProviderStore = ProxyProviderStore()
         let anonymousMode = AnonymousMode()
+        let notificationCenterStore = NotificationCenterStore()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
         self.logStore = logStore
@@ -91,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.ruleStore = ruleStore
         self.proxyProviderStore = proxyProviderStore
         self.anonymousMode = anonymousMode
+        self.notificationCenterStore = notificationCenterStore
         self.kernel = KernelController(
             resolver: resolver,
             logStore: logStore,
@@ -98,10 +100,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             trafficStore: trafficStore,
             historyStore: historyStore,
             connectionsStore: connectionsStore,
-            configStore: configStore
+            configStore: configStore,
+            notificationCenterStore: notificationCenterStore
         )
         self.loginItem = LoginItemController()
-        self.notificationCenterStore = NotificationCenterStore()
         super.init()
     }
 
