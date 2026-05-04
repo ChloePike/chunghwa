@@ -29,6 +29,11 @@ struct ConnectionsView: View {
     /// can keep showing details after the kernel drops it from `connections`.
     @State private var lastSelectedSnapshot: MihomoConnection? = nil
 
+    /// Free-text filter applied across host / process / chain / rule. Bound to
+    /// the toolbar's TextField; can be focused via the global cmd-k shortcut.
+    @State private var query: String = ""
+    @FocusState private var filterFocused: Bool
+
     var body: some View {
         VStack(spacing: 10) {
             toolbar
@@ -48,6 +53,9 @@ struct ConnectionsView: View {
                 lastSelectedSnapshot = live
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .chungHwaFocusFilter)) { _ in
+            filterFocused = true
+        }
     }
 
     /// String fingerprint used as `onChange` trigger so we don't require
@@ -62,10 +70,21 @@ struct ConnectionsView: View {
 
     // MARK: - Data
 
-    /// Rows the UI is currently rendering — the live store, or the frozen
-    /// snapshot taken when the user pressed pause.
+    /// Rows the UI is currently rendering — the live store (or frozen
+    /// snapshot if paused), filtered by the toolbar's free-text query.
     private var rows: [MihomoConnection] {
-        frozen ?? store.connections
+        let base = frozen ?? store.connections
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return base }
+        return base.filter { conn in
+            if conn.destination.lowercased().contains(q) { return true }
+            if let host = conn.metadata.host, host.lowercased().contains(q) { return true }
+            if let ip = conn.metadata.destinationIP, ip.lowercased().contains(q) { return true }
+            if let proc = conn.metadata.process, proc.lowercased().contains(q) { return true }
+            if conn.rule.lowercased().contains(q) { return true }
+            if conn.chains.contains(where: { $0.lowercased().contains(q) }) { return true }
+            return false
+        }
     }
 
     /// We don't currently track per-connection liveness from the kernel, so
@@ -91,6 +110,34 @@ struct ConnectionsView: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+                TextField("Filter connections", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                    .focused($filterFocused)
+                if !query.isEmpty {
+                    Button {
+                        query = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(ChungHwa.Palette.faint)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(ChungHwa.Palette.fill)
+                    .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+            )
+
             Text("\(activeCount) active · \(rows.count) total")
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.dim)

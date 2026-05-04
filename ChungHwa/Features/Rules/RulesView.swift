@@ -12,6 +12,7 @@ struct RulesView: View {
 
     @State private var query: String = ""
     @State private var typeFilter: String? = nil
+    @FocusState private var filterFocused: Bool
 
     var body: some View {
         VStack(spacing: 10) {
@@ -31,6 +32,9 @@ struct RulesView: View {
         .navigationTitle("Rules")
         .task(id: kernel.apiClient == nil ? "off" : "on") {
             await store.refresh(api: kernel.apiClient)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .chungHwaFocusFilter)) { _ in
+            filterFocused = true
         }
     }
 
@@ -75,6 +79,7 @@ struct RulesView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(ChungHwa.Palette.text)
+                    .focused($filterFocused)
                 if !query.isEmpty {
                     Button {
                         query = ""
