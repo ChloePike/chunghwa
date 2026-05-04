@@ -16,6 +16,7 @@ struct OverviewView: View {
     @Environment(TrafficStore.self) private var traffic
     @Environment(ConnectionsStore.self) private var connectionsStore
     @Environment(AnonymousMode.self) private var anon
+    @Environment(NetworkStatusStore.self) private var net
 
     /// 1 Hz tick so the uptime stat re-renders every second while running.
     @State private var now = Date()
@@ -50,7 +51,7 @@ struct OverviewView: View {
 
     private var runningStatusCard: some View {
         ChCardWithHeader(
-            "Running Status",
+            "运行状态",
             systemImage: "power",
             iconColor: ChungHwa.Palette.patina,
             right: { runningStatusRight }
@@ -60,11 +61,11 @@ struct OverviewView: View {
                 case .running:
                     runningStatusBody
                 case .idle:
-                    statusMessage("Idle")
+                    statusMessage("空闲")
                 case .starting:
-                    statusMessage("Starting…")
+                    statusMessage("启动中…")
                 case .failed(let reason):
-                    statusMessage("Failed: \(reason)")
+                    statusMessage("失败: \(reason)")
                 }
             }
         }
@@ -94,7 +95,7 @@ struct OverviewView: View {
 
         HStack(alignment: .top, spacing: 14) {
             ChStat(
-                label: "Uptime",
+                label: "运行时长",
                 value: uptimeText,
                 systemImage: "power",
                 color: ChungHwa.Palette.brass
@@ -102,7 +103,7 @@ struct OverviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             ChStat(
-                label: "Connections",
+                label: "连接数",
                 value: String(connectionsStore.connections.count),
                 systemImage: "link",
                 color: ChungHwa.Palette.brass
@@ -110,7 +111,7 @@ struct OverviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             ChStat(
-                label: "Kernel Memory",
+                label: "内核内存",
                 value: memText,
                 systemImage: "cpu",
                 color: ChungHwa.Palette.brass
@@ -122,21 +123,21 @@ struct OverviewView: View {
 
         HStack(alignment: .top, spacing: 14) {
             ChSubStat(
-                "System",
+                "系统",
                 value: "macOS \(ProcessInfo.processInfo.operatingSystemVersionString)",
                 systemImage: "desktopcomputer"
             )
             .frame(maxWidth: .infinity, alignment: .leading)
 
             ChSubStat(
-                "Version",
+                "版本",
                 value: appVersionString,
                 systemImage: "shippingbox"
             )
             .frame(maxWidth: .infinity, alignment: .leading)
 
             ChSubStat(
-                "Kernel",
+                "内核",
                 value: kernelVersionString,
                 systemImage: "cpu"
             )
@@ -158,16 +159,20 @@ struct OverviewView: View {
 
     private var networkStatusCard: some View {
         ChCardWithHeader(
-            "Network Status",
+            "网络状态",
             systemImage: "globe",
             iconColor: ChungHwa.Palette.patina,
-            right: { ghostRefreshButton {} }
+            right: {
+                ghostRefreshButton {
+                    Task { await net.refresh() }
+                }
+            }
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 14) {
                     ChStat(
-                        label: "Internet",
-                        value: "—",
+                        label: "互联网",
+                        value: latencyText(net.internetLatencyMs),
                         systemImage: "globe",
                         color: ChungHwa.Palette.brass
                     )
@@ -175,15 +180,15 @@ struct OverviewView: View {
 
                     ChStat(
                         label: "DNS",
-                        value: "—",
+                        value: latencyText(net.dnsLatencyMs),
                         systemImage: "arrow.left.arrow.right",
                         color: ChungHwa.Palette.brass
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     ChStat(
-                        label: "Router",
-                        value: "—",
+                        label: "路由",
+                        value: latencyText(net.routerLatencyMs),
                         systemImage: "shippingbox",
                         color: ChungHwa.Palette.brass
                     )
@@ -194,19 +199,19 @@ struct OverviewView: View {
 
                 HStack(alignment: .top, spacing: 14) {
                     ChSubStat(
-                        "Network",
-                        value: "Wi-Fi",
-                        systemImage: "wifi"
+                        "网络",
+                        value: net.networkType,
+                        systemImage: networkSymbol
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    ChSubStat("Local IP", systemImage: "shippingbox") {
-                        Text("—").anonMask(anon.enabled)
+                    ChSubStat("本地 IP", systemImage: "shippingbox") {
+                        Text(net.localIPv4 ?? "—").anonMask(anon.enabled)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    ChSubStat("Proxy IP", systemImage: "globe") {
-                        Text("—").anonMask(anon.enabled)
+                    ChSubStat("代理 IP", systemImage: "globe") {
+                        Text(net.proxyIPv4 ?? "—").anonMask(anon.enabled)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -214,11 +219,25 @@ struct OverviewView: View {
         }
     }
 
+    private func latencyText(_ ms: Int?) -> String {
+        guard let ms else { return "—" }
+        return "\(ms) ms"
+    }
+
+    private var networkSymbol: String {
+        switch net.networkType {
+        case "Wi-Fi":    return "wifi"
+        case "Ethernet": return "cable.connector"
+        case "Cellular": return "antenna.radiowaves.left.and.right"
+        default:         return "network"
+        }
+    }
+
     // MARK: Traffic Stats
 
     private var trafficStatsCard: some View {
         ChCardWithHeader(
-            "Traffic Stats",
+            "流量",
             systemImage: "chart.line.uptrend.xyaxis",
             iconColor: ChungHwa.Palette.brass,
             right: { EmptyView() }
@@ -226,7 +245,7 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 16) {
                     trafficColumn(
-                        caption: "Upload Speed",
+                        caption: "上传速度",
                         arrow: "↑",
                         bps: traffic.current?.upBps ?? 0,
                         series: traffic.samples.map { Double($0.upBps) },
@@ -235,7 +254,7 @@ struct OverviewView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     trafficColumn(
-                        caption: "Download Speed",
+                        caption: "下载速度",
                         arrow: "↓",
                         bps: traffic.current?.downBps ?? 0,
                         series: traffic.samples.map { Double($0.downBps) },
@@ -247,13 +266,13 @@ struct OverviewView: View {
                 softDivider.padding(.top, 4)
 
                 HStack {
-                    Text("↑ Upload ")
+                    Text("↑ 上传 ")
                         .foregroundStyle(ChungHwa.Palette.dim)
                     + Text(totalUpString)
                         .foregroundStyle(ChungHwa.Palette.text)
                         .fontWeight(.semibold)
                     Spacer()
-                    Text("↓ Download ")
+                    Text("↓ 下载 ")
                         .foregroundStyle(ChungHwa.Palette.dim)
                     + Text(totalDownString)
                         .foregroundStyle(ChungHwa.Palette.text)

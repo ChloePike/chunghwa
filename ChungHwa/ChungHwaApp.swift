@@ -24,6 +24,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.anonymousMode)
                 .environment(appDelegate.loginItem)
                 .environment(appDelegate.notificationCenterStore)
+                .environment(appDelegate.networkStatusStore)
         }
         .commands {
             ChungHwaCommands()
@@ -35,6 +36,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.systemProxy)
                 .environment(appDelegate.configStore)
                 .environment(appDelegate.profileStore)
+                .environment(appDelegate.proxyStore)
                 .environment(appDelegate.trafficStore)
                 .environment(appDelegate.historyStore)
                 .environment(appDelegate.connectionsStore)
@@ -43,6 +45,7 @@ struct ChungHwaApp: App {
                 kernel: appDelegate.kernel,
                 systemProxy: appDelegate.systemProxy))
         }
+        .menuBarExtraStyle(.window)
     }
 }
 
@@ -64,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let kernel: KernelController
     let loginItem: LoginItemController
     let notificationCenterStore: NotificationCenterStore
+    let networkStatusStore: NetworkStatusStore
 
     override init() {
         let resolver = KernelBinaryResolver()
@@ -79,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let proxyProviderStore = ProxyProviderStore()
         let anonymousMode = AnonymousMode()
         let notificationCenterStore = NotificationCenterStore()
+        let networkStatusStore = NetworkStatusStore()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
         self.logStore = logStore
@@ -93,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.proxyProviderStore = proxyProviderStore
         self.anonymousMode = anonymousMode
         self.notificationCenterStore = notificationCenterStore
+        self.networkStatusStore = networkStatusStore
         self.kernel = KernelController(
             resolver: resolver,
             logStore: logStore,
@@ -105,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.loginItem = LoginItemController()
         super.init()
+        networkStatusStore.startAutoRefresh()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -139,9 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let installed = resolver.managedVersion(), !installed.isEmpty else { return }
         guard latest != installed else { return }
         notificationCenterStore.post(
-            source: "Kernel",
+            source: "内核",
             level: .info,
-            message: "mihomo \(latest) is available · open Settings → Update kernel"
+            message: "mihomo \(latest) 已发布 · 打开 设置 → 更新内核"
         )
     }
 
