@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SidebarView: View {
@@ -37,12 +38,30 @@ struct SidebarView: View {
                 Color.clear.frame(height: 8)
             }
         }
+        .scrollContentBackground(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(SidebarGlass())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             SettingsFooter(selection: $selection)
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
     }
+}
+
+/// `NSVisualEffectView` with the system `.sidebar` material — on macOS Tahoe
+/// (26+) this is the surface AppKit auto-promotes to Liquid Glass, matching
+/// the look of Apple Music / Mail / Notes sidebars.
+private struct SidebarGlass: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material = .sidebar
+        v.blendingMode = .behindWindow
+        v.state = .followsWindowActiveState
+        v.isEmphasized = true
+        return v
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 private struct TabRow: View {
@@ -56,21 +75,18 @@ private struct TabRow: View {
         Button(action: select) {
             HStack(spacing: 10) {
                 Image(systemName: tab.symbol)
-                    .font(.system(size: 13))
-                    .foregroundStyle(isActive ? ChungHwa.Palette.text : ChungHwa.Palette.dim)
+                    .font(.system(size: 13, weight: isActive ? .semibold : .regular))
+                    .foregroundStyle(iconColor)
                     .frame(width: 16)
                 Text(tab.title)
                     .font(.system(size: 12.5, weight: isActive ? .semibold : .medium))
-                    .foregroundStyle(isActive ? ChungHwa.Palette.text : ChungHwa.Palette.dim)
+                    .foregroundStyle(textColor)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(rowBackground)
-            )
+            .background(rowBackground)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -79,10 +95,38 @@ private struct TabRow: View {
         .onHover { hovering = $0 }
     }
 
-    private var rowBackground: Color {
-        if isActive { return ChungHwa.Palette.sideActive }
-        if hovering { return ChungHwa.Palette.sideHover }
-        return .clear
+    @ViewBuilder
+    private var rowBackground: some View {
+        if isActive {
+            // Saturated brass pill, drops a small shadow so it floats off
+            // the sidebar glass — same vibe as Apple Music's red selection.
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [
+                        ChungHwa.Palette.brass.opacity(0.95),
+                        ChungHwa.Palette.brass.opacity(0.78),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ))
+                .shadow(color: ChungHwa.Palette.brass.opacity(0.35), radius: 4, y: 2)
+        } else if hovering {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(.thinMaterial)
+                .opacity(0.6)
+        } else {
+            Color.clear
+        }
+    }
+
+    private var iconColor: Color {
+        if isActive { return .white }
+        return ChungHwa.Palette.dim
+    }
+
+    private var textColor: Color {
+        if isActive { return .white }
+        return ChungHwa.Palette.text
     }
 }
 
@@ -108,11 +152,12 @@ private struct SettingsFooter: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider()
+            Divider().opacity(0.4)
             TabRow(tab: .settings,
                    isActive: selection == .settings,
                    select: { selection = .settings })
                 .padding(.vertical, 6)
         }
+        .background(SidebarGlass())
     }
 }
