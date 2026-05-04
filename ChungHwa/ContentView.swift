@@ -33,6 +33,7 @@ struct ContentView: View {
                 ErrorBanner(bus: errorBus)
                 detailScreen
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                StatusBar()
             }
         }
         .frame(minWidth: 900, minHeight: 600)
@@ -126,6 +127,165 @@ private struct ErrorBanner: View {
             }
         }
         .animation(.snappy(duration: 0.18), value: bus.current?.posted)
+    }
+}
+
+private struct StatusBar: View {
+    @Environment(KernelController.self) private var kernel
+    @Environment(ConnectionsStore.self) private var connectionsStore
+    @Environment(TrafficStore.self) private var traffic
+    @Environment(ConfigStore.self) private var configStore
+    @Environment(SystemProxyController.self) private var systemProxy
+
+    var body: some View {
+        HStack(spacing: 8) {
+            kernelItem
+            separator
+            connectionsItem
+            separator
+            trafficItem
+            Spacer(minLength: 8)
+            modeItem
+            separator
+            systemProxyBadge
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 24)
+        .frame(maxWidth: .infinity)
+        .background(ChungHwa.Palette.fill)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(ChungHwa.Palette.line)
+                .frame(height: 0.5)
+        }
+    }
+
+    private var separator: some View {
+        Text("·")
+            .font(.system(size: 10.5))
+            .foregroundStyle(ChungHwa.Palette.faint)
+    }
+
+    @ViewBuilder
+    private var kernelItem: some View {
+        HStack(spacing: 6) {
+            ChDot(color: kernelDotColor, size: 6, pulse: isStarting)
+            Text(kernelLabel)
+                .font(.system(size: 10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            if let v = kernelVersion {
+                Text("·")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+                Text(v)
+                    .font(ChungHwa.Typography.mono(10.5))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+            }
+        }
+    }
+
+    private var isStarting: Bool {
+        if case .starting = kernel.status { return true }
+        return false
+    }
+
+    private var kernelDotColor: Color {
+        switch kernel.status {
+        case .running:  return ChungHwa.Palette.patina
+        case .starting: return ChungHwa.Palette.brass
+        case .failed:   return ChungHwa.Palette.earth
+        case .idle:     return ChungHwa.Palette.faint
+        }
+    }
+
+    private var kernelLabel: String {
+        switch kernel.status {
+        case .running:  return "running"
+        case .starting: return "starting…"
+        case .failed:   return "failed"
+        case .idle:     return "idle"
+        }
+    }
+
+    private var kernelVersion: String? {
+        if case .running(let v) = kernel.status, !v.isEmpty {
+            return v.hasPrefix("v") ? v : "v\(v)"
+        }
+        return nil
+    }
+
+    private var connectionsItem: some View {
+        HStack(spacing: 4) {
+            Text("\(connectionsStore.connections.count)")
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Text("conns")
+                .font(.system(size: 10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+        }
+    }
+
+    private var trafficItem: some View {
+        HStack(spacing: 4) {
+            Text("↑")
+                .font(.system(size: 10.5))
+                .foregroundStyle(ChungHwa.Palette.faint)
+            Text(upRate)
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Text("·")
+                .font(.system(size: 10.5))
+                .foregroundStyle(ChungHwa.Palette.faint)
+            Text("↓")
+                .font(.system(size: 10.5))
+                .foregroundStyle(ChungHwa.Palette.faint)
+            Text(downRate)
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+        }
+    }
+
+    private var upRate: String {
+        guard let s = traffic.current else { return "—" }
+        return ChFormat.rate(s.upBps)
+    }
+
+    private var downRate: String {
+        guard let s = traffic.current else { return "—" }
+        return ChFormat.rate(s.downBps)
+    }
+
+    private var modeItem: some View {
+        HStack(spacing: 4) {
+            Text("mode:")
+                .font(.system(size: 10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Text(configStore.mode?.displayName ?? "—")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(ChungHwa.Palette.dim)
+        }
+    }
+
+    private var systemProxyBadge: some View {
+        let on = systemProxy.enabled
+        return Text(on ? "SP on" : "SP off")
+            .font(ChungHwa.Typography.mono(10, weight: .medium))
+            .foregroundStyle(on ? ChungHwa.Palette.patina : ChungHwa.Palette.faint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(on
+                          ? ChungHwa.Palette.patina.opacity(0.12)
+                          : ChungHwa.Palette.fillStrong)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(on
+                                  ? ChungHwa.Palette.patina.opacity(0.30)
+                                  : ChungHwa.Palette.line,
+                                  lineWidth: 0.5)
+            )
     }
 }
 
