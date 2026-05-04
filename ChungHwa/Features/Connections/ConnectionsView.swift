@@ -34,6 +34,10 @@ struct ConnectionsView: View {
     @State private var query: String = ""
     @FocusState private var filterFocused: Bool
 
+    /// Whether the row list is the current first responder. When true, arrow
+    /// keys move the selection and a brass focus ring appears around the card.
+    @FocusState private var listFocused: Bool
+
     var body: some View {
         VStack(spacing: 10) {
             toolbar
@@ -279,11 +283,46 @@ struct ConnectionsView: View {
                         .contentShape(Rectangle())
                         .onTapGesture {
                             select(row)
+                            listFocused = true
                         }
                         .contextMenu {
                             rowContextMenu(for: [row.id])
                         }
                 }
+            }
+        }
+        .focusable()
+        .focused($listFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.upArrow) {
+            moveSelection(-1)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            moveSelection(+1)
+            return .handled
+        }
+        .onKeyPress(.return) {
+            // Selection already drives the inspector; if nothing is selected
+            // (e.g. focus came in from elsewhere), pick the first row so
+            // Return reliably "opens" something.
+            if selectedID == nil, let first = rows.first {
+                select(first)
+            }
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            clearSelection()
+            return .handled
+        }
+        .overlay {
+            // Subtle brass focus ring layered over the existing ChCard border
+            // — only visible while the list owns the keyboard.
+            if listFocused {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(ChungHwa.Palette.brass.opacity(0.55),
+                                  lineWidth: 0.5)
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -363,6 +402,30 @@ struct ConnectionsView: View {
         withAnimation(.snappy(duration: 0.18)) {
             selectedID = nil
             lastSelectedSnapshot = nil
+        }
+    }
+
+    /// Move the current selection by `delta` rows within the post-filter
+    /// `rows` array. Bootstraps to the first/last row when nothing is selected
+    /// yet, and clamps at the edges so arrow-mashing doesn't wrap around.
+    private func moveSelection(_ delta: Int) {
+        let visible = rows
+        guard !visible.isEmpty else { return }
+
+        let newRow: MihomoConnection
+        if let id = selectedID,
+           let idx = visible.firstIndex(where: { $0.id == id }) {
+            let next = max(0, min(visible.count - 1, idx + delta))
+            // Already at the edge — nothing to do.
+            if next == idx { return }
+            newRow = visible[next]
+        } else {
+            newRow = delta > 0 ? visible.first! : visible.last!
+        }
+
+        withAnimation(.snappy(duration: 0.15)) {
+            selectedID = newRow.id
+            lastSelectedSnapshot = newRow
         }
     }
 
