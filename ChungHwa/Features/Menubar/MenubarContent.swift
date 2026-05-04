@@ -230,6 +230,18 @@ struct MenubarContent: View {
 
     private var footerSection: some View {
         VStack(spacing: 0) {
+            Button {
+                Task { await kernel.restart() }
+            } label: {
+                MenubarRowLabel(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: "重启内核",
+                    trailing: "⇧⌘R",
+                    showsChevron: false
+                )
+            }
+            .buttonStyle(.plain)
+
             Button(action: openSettings) {
                 MenubarRowLabel(
                     icon: "gearshape",

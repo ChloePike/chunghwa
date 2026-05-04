@@ -62,6 +62,15 @@ struct ChungHwaCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command])
             .disabled(kernel?.apiClient == nil)
 
+            Button("重启内核") {
+                guard let kernel else { return }
+                Task { await kernel.restart() }
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(kernel == nil)
+
+            Divider()
+
             Button("清空日志") {
                 logStore?.clear()
             }

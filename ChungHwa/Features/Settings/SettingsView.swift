@@ -21,6 +21,10 @@ struct SettingsView: View {
     @State private var privilegeError: String?
     @State private var portDraft: Int = ConfigStore.currentMixedPort
     @State private var applyingPort: Bool = false
+    /// stat()-based privilege check is opaque to SwiftUI's observability —
+    /// we explicitly refresh it on appear, after grant, and whenever the
+    /// active binary path changes.
+    @State private var tunPrivilegedSnap: Bool = false
 
     var body: some View {
         ScrollView {
@@ -499,15 +503,15 @@ struct SettingsView: View {
                          iconColor: ChungHwa.Palette.brass) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .center, spacing: 10) {
-                    Image(systemName: tunPrivileged
+                    Image(systemName: tunPrivilegedSnap
                           ? "checkmark.shield.fill"
                           : "exclamationmark.shield.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(tunPrivileged
+                        .foregroundStyle(tunPrivilegedSnap
                                          ? ChungHwa.Palette.patina
                                          : ChungHwa.Palette.earth)
 
-                    Text(tunPrivileged
+                    Text(tunPrivilegedSnap
                          ? "mihomo 内核 · 已授权 root（TUN 可用）"
                          : "未授权（TUN 不可用，点击右侧授权）")
                         .font(.system(size: 12, weight: .medium))
@@ -515,14 +519,16 @@ struct SettingsView: View {
 
                     Spacer(minLength: 8)
 
-                    if !tunPrivileged {
+                    if !tunPrivilegedSnap {
                         BrassButton(title: grantingPrivileges ? "授权中…" : "授权",
                                     systemImage: "lock.open") {
                             Task { await grantPrivileges() }
                         }
                         .disabled(grantingPrivileges || kernel.activeBinary == nil)
-                        .opacity(grantingPrivileges ? 0.55 : 1)
                     }
+                }
+                .task(id: kernel.activeBinary?.url.path ?? "") {
+                    refreshTunPrivilege()
                 }
 
                 if let err = privilegeError {
@@ -544,9 +550,12 @@ struct SettingsView: View {
         }
     }
 
-    private var tunPrivileged: Bool {
-        guard let path = kernel.activeBinary?.url.path else { return false }
-        return KernelPrivilegeHelper.isPrivileged(path: path)
+    private func refreshTunPrivilege() {
+        guard let path = kernel.activeBinary?.url.path else {
+            tunPrivilegedSnap = false
+            return
+        }
+        tunPrivilegedSnap = KernelPrivilegeHelper.isPrivileged(path: path)
     }
 
     private func grantPrivileges() async {
@@ -558,6 +567,9 @@ struct SettingsView: View {
             try await KernelPrivilegeHelper.grantPrivileges(path: path)
             // Restart so the now-setuid binary actually runs as root.
             await kernel.restart()
+            // stat() doesn't ride observability — re-read explicitly so the
+            // card flips to "已授权" without waiting for an unrelated re-render.
+            refreshTunPrivilege()
         } catch {
             privilegeError = (error as NSError).localizedDescription
         }
