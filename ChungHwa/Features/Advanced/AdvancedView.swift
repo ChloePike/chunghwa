@@ -194,7 +194,7 @@ struct AdvancedView: View {
                 }
                 .buttonStyle(.plain)
             }
-            FootnoteRow(text: "保存即时下发到 mihomo · 也写入下次启动的 YAML")
+            FootnoteRow(text: "仅在使用默认配置时生效；订阅 YAML 自带 dns 块时优先用订阅自己的")
         }
     }
 

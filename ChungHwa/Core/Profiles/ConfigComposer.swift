@@ -10,11 +10,17 @@ enum ConfigComposer {
     static func compose(userYaml: String?, externalControllerHostPort: String, secret: String) -> String {
         let usingDefault = (userYaml == nil)
         let bodyRaw = userYaml ?? defaultBody
-        // First strip block-style keys (tun + dns + its children), then inline keys.
-        let withoutBlocks = stripTopLevelBlocks(bodyRaw, keys: ["tun", "dns"])
-        // Strip user's port keys so our override wins. mihomo refuses
-        // duplicate top-level keys, and we keep the inbound port in app
-        // state, not the user yaml.
+
+        // Only strip / inject `dns:` when the source yaml has none. A
+        // subscription's DNS block is usually carefully tuned (fake-ip-filter,
+        // China-bootstrap servers, geosite lists); replacing it with our
+        // minimal version breaks resolution. Our DNS editor is therefore
+        // effective only on the default profile (or any yaml that didn't
+        // ship its own dns block).
+        let userHasDNS = hasTopLevelKey(bodyRaw, key: "dns")
+
+        let blockKeysToStrip: [String] = userHasDNS ? ["tun"] : ["tun", "dns"]
+        let withoutBlocks = stripTopLevelBlocks(bodyRaw, keys: blockKeysToStrip)
         let stripped = stripTopLevelKeys(
             withoutBlocks,
             keys: ["external-controller", "secret", "mixed-port", "port", "socks-port"]
@@ -22,9 +28,9 @@ enum ConfigComposer {
         let body = trimmedTrailing(stripped)
         let tunEnabled = UserDefaults.standard.bool(forKey: ConfigStore.tunEnabledDefaultsKey)
         let mixedPort = ConfigStore.currentMixedPort
-        let dns = ConfigStore.currentDNS()
-        let dnsBlock = renderDNSBlock(dns)
         let rulesBlock = renderRulesBlockIfNeeded(usingDefault: usingDefault)
+        let dnsBlock = userHasDNS ? "" : "\n" + renderDNSBlock(ConfigStore.currentDNS())
+
         return """
         \(body)\(rulesBlock)
 
@@ -38,18 +44,42 @@ enum ConfigComposer {
           auto-route: true
           auto-detect-interface: true
           dns-hijack:
-            - any:53
-        \(dnsBlock)
+            - any:53\(dnsBlock)
         """
     }
 
+    /// Tolerant top-level key check — used to decide whether the user's yaml
+    /// already provides a block we shouldn't clobber.
+    private static func hasTopLevelKey(_ yaml: String, key: String) -> Bool {
+        for line in yaml.split(separator: "\n", omittingEmptySubsequences: false) {
+            if matchesTopLevelKey(line, keys: [key]) { return true }
+        }
+        return false
+    }
+
+    /// Composed DNS block used when the source yaml has none. Emits the
+    /// pieces mihomo actually needs to resolve: a `default-nameserver` block
+    /// (plain UDP) so the DoH endpoints can be bootstrap-resolved, a
+    /// `fake-ip-filter` glob list so common LAN hostnames don't get
+    /// fake-ip'd into oblivion, plus the user-edited nameserver / fallback.
+    /// The `listen: 0.0.0.0:53` line is dropped when the kernel isn't
+    /// running as root — binding 53 needs privilege; emitting it without
+    /// privilege makes mihomo fail to come up.
     private static func renderDNSBlock(_ prefs: DNSPrefs) -> String {
         var lines: [String] = ["dns:", "  enable: true"]
-        if prefs.hijackEnabled {
+        if prefs.hijackEnabled && bundledKernelIsPrivileged() {
             lines.append("  listen: 0.0.0.0:53")
         }
         lines.append("  enhanced-mode: \(prefs.enhancedMode)")
         lines.append("  fake-ip-range: 198.18.0.1/16")
+        lines.append("  default-nameserver:")
+        for entry in defaultBootstrap {
+            lines.append("    - \(yamlScalar(entry))")
+        }
+        lines.append("  fake-ip-filter:")
+        for pattern in defaultFakeIPFilter {
+            lines.append("    - \(yamlScalar(pattern))")
+        }
         lines.append("  nameserver:")
         let ns = prefs.nameservers.isEmpty ? ConfigStore.defaultNameservers : prefs.nameservers
         for entry in ns {
@@ -62,6 +92,49 @@ enum ConfigComposer {
         }
         return lines.joined(separator: "\n")
     }
+
+    /// Quick check that the active mihomo binary is setuid-root, mirroring
+    /// `KernelPrivilegeHelper.isPrivileged` without the dependency. Returns
+    /// false defensively when the path can't be resolved.
+    private static func bundledKernelIsPrivileged() -> Bool {
+        let candidates: [String?] = [
+            UserDefaults.standard.string(forKey: "KernelCustomBinaryPath"),
+            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+                .first?.appendingPathComponent("ChungHwa/kernel/mihomo").path,
+            Bundle.main.resourceURL?.appendingPathComponent("mihomo").path,
+        ]
+        for case let p? in candidates where FileManager.default.fileExists(atPath: p) {
+            var st = stat()
+            guard stat(p, &st) == 0 else { continue }
+            if st.st_uid == 0 && (st.st_mode & UInt16(S_ISUID)) != 0 { return true }
+            return false
+        }
+        return false
+    }
+
+    /// Plain-UDP DNS used to bootstrap DoH/DoT endpoint resolution.
+    private static let defaultBootstrap: [String] = [
+        "223.5.5.5",
+        "119.29.29.29",
+    ]
+
+    /// Common LAN / device-discovery hostnames that should NOT receive
+    /// fake-ip — return real IPs instead, otherwise printers / AirPlay /
+    /// captive portals break.
+    private static let defaultFakeIPFilter: [String] = [
+        "*.lan",
+        "*.local",
+        "+.market.xiaomi.com",
+        "localhost.ptlogin2.qq.com",
+        "*.msftconnecttest.com",
+        "*.msftncsi.com",
+        "+.in-addr.arpa",
+        "+.ip6.arpa",
+        "time.*.com",
+        "ntp.*.com",
+        "+.apple.com",
+        "+.icloud.com",
+    ]
 
     /// When the user is on the default profile (no source yaml), inject the
     /// persisted custom rules as the entire `rules:` block. We deliberately
