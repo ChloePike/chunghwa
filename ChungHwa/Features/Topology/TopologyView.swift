@@ -6,13 +6,14 @@ import SwiftUI
 ///
 ///   GLOBAL  ──▶  group  ──▶  upstream
 ///
-/// We don't actually know which group is currently routing without runtime
-/// matching info, so every group's `now` upstream is highlighted uniformly
-/// — this conveys the static shape of the routing fabric, which is the
-/// useful affordance here.
+/// Path width and brass intensity track live connection counts pulled from
+/// `ConnectionsStore` — heavier paths read brighter, idle paths fade to the
+/// neutral line colour. The static `now` selection still shapes which legs
+/// exist, but visual emphasis is driven by traffic.
 struct TopologyView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(ProxyStore.self) private var store
+    @Environment(ConnectionsStore.self) private var connectionsStore
 
     var body: some View {
         Group {
@@ -43,6 +44,29 @@ struct TopologyView: View {
         }
     }
 
+    /// Tally connections-per-group and connections-per-upstream from the
+    /// current `ConnectionsStore` snapshot. Recomputed every render — the
+    /// snapshot is small (typically <500 entries).
+    private var activity: TopologyActivity {
+        var groupCounts: [String: Int] = [:]
+        var upstreamCounts: [String: Int] = [:]
+        for conn in connectionsStore.connections {
+            guard let upstream = conn.chains.last else { continue }
+            upstreamCounts[upstream, default: 0] += 1
+            // Earlier entries in the chain are the groups that routed to it.
+            // `chains` ordering is innermost-first, so everything before the
+            // last element is a group.
+            if conn.chains.count > 1 {
+                for g in conn.chains.dropLast() {
+                    groupCounts[g, default: 0] += 1
+                }
+            }
+        }
+        return TopologyActivity(groupCounts: groupCounts,
+                                upstreamCounts: upstreamCounts,
+                                totalConnections: connectionsStore.connections.count)
+    }
+
     private var kernelStatusKey: String {
         switch kernel.status {
         case .idle:           return "idle"
@@ -55,11 +79,18 @@ struct TopologyView: View {
     // MARK: layout
 
     private var content: some View {
-        let model = TopologyModel(groups: store.groups, store: store)
+        let activity = self.activity
+        let model = TopologyModel(groups: store.groups,
+                                  store: store,
+                                  activity: activity)
         return ScrollView([.vertical, .horizontal]) {
             VStack(alignment: .leading, spacing: 18) {
-                header(model: model)
+                header(model: model, activity: activity)
                 TopologyDiagram(model: model)
+                    .padding(.bottom, 4)
+                Text("Path width and color reflect live connection counts")
+                    .font(.system(size: 10))
+                    .foregroundStyle(ChungHwa.Palette.faint)
                     .padding(.bottom, 8)
             }
             .padding(.horizontal, 24)
@@ -67,14 +98,14 @@ struct TopologyView: View {
         }
     }
 
-    private func header(model: TopologyModel) -> some View {
+    private func header(model: TopologyModel, activity: TopologyActivity) -> some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Active Topology")
                     .font(ChungHwa.Typography.serif(22, weight: .medium))
                     .foregroundStyle(ChungHwa.Palette.text)
                     .tracking(-0.3)
-                Text("\(model.groups.count) groups routing through \(model.upstreams.count) upstreams")
+                Text("\(model.groups.count) groups · \(model.upstreams.count) upstreams · \(activity.totalConnections) live connections")
                     .font(.system(size: 12))
                     .foregroundStyle(ChungHwa.Palette.dim)
             }
@@ -131,6 +162,19 @@ struct TopologyView: View {
     }
 }
 
+// MARK: - Activity
+
+/// Live connection counts pulled out of `ConnectionsStore`. Keyed by group /
+/// upstream name so the diagram can light up the heaviest paths.
+struct TopologyActivity {
+    let groupCounts: [String: Int]
+    let upstreamCounts: [String: Int]
+    let totalConnections: Int
+
+    func group(_ name: String) -> Int { groupCounts[name] ?? 0 }
+    func upstream(_ name: String) -> Int { upstreamCounts[name] ?? 0 }
+}
+
 // MARK: - Model
 
 /// Pre-computed positions and links for the diagram. Doing this once outside
@@ -145,12 +189,17 @@ private struct TopologyModel {
         let lastDelay: Int?
         let position: CGPoint
         let isActive: Bool
+        /// Live connection count routed through this node, used to drive
+        /// brass intensity and the corner badge.
+        let activity: Int
     }
 
     struct Link: Hashable {
         let from: CGPoint
         let to: CGPoint
         let active: Bool
+        /// Live connections flowing through this link. 0 → neutral line.
+        let activity: Int
     }
 
     let groups: [MihomoProxy]
@@ -173,7 +222,7 @@ private struct TopologyModel {
     static let sidePadding: CGFloat = 14
     static let minDiagramWidth: CGFloat = 720
 
-    init(groups: [MihomoProxy], store: ProxyStore) {
+    init(groups: [MihomoProxy], store: ProxyStore, activity: TopologyActivity) {
         self.groups = groups
 
         // Build the right column: each upstream a group points at, in
@@ -231,7 +280,8 @@ private struct TopologyModel {
             subtitle: "Mode: Rule",
             lastDelay: nil,
             position: rootPos,
-            isActive: true
+            isActive: true,
+            activity: activity.totalConnections
         )
 
         var allNodes: [Node] = [rootNode]
@@ -243,6 +293,7 @@ private struct TopologyModel {
             let pos = CGPoint(x: colXs[1], y: groupYs[i])
             groupCenters[g.name] = pos
             let isActive = (g.now != nil)
+            let groupActivity = activity.group(g.name)
             allNodes.append(Node(
                 id: "group:\(g.name)",
                 kind: .group,
@@ -250,13 +301,16 @@ private struct TopologyModel {
                 subtitle: g.type,
                 lastDelay: nil,
                 position: pos,
-                isActive: isActive
+                isActive: isActive,
+                activity: groupActivity
             ))
-            // GLOBAL → group
+            // GLOBAL → group. Width/colour of this leg keys off how many
+            // live connections pass through the group.
             allLinks.append(Link(
                 from: CGPoint(x: rootPos.x + Self.cardWidth / 2, y: rootPos.y),
                 to:   CGPoint(x: pos.x - Self.cardWidth / 2,     y: pos.y),
-                active: isActive
+                active: isActive,
+                activity: groupActivity
             ))
         }
 
@@ -273,24 +327,48 @@ private struct TopologyModel {
                 subtitle: proxy?.type.uppercased(),
                 lastDelay: proxy?.lastDelay,
                 position: pos,
-                isActive: true
+                isActive: true,
+                activity: activity.upstream(name)
             ))
         }
 
-        // group → upstream
+        // group → upstream. We approximate per-link traffic by min(group,
+        // upstream) — the connections-store doesn't expose per-edge counts,
+        // so this avoids over-stating either node's load.
         for g in groups {
             guard let now = g.now,
                   let from = groupCenters[g.name],
                   let to = upstreamCenters[now] else { continue }
+            let edgeActivity = min(activity.group(g.name), activity.upstream(now))
             allLinks.append(Link(
                 from: CGPoint(x: from.x + Self.cardWidth / 2, y: from.y),
                 to:   CGPoint(x: to.x - Self.cardWidth / 2,   y: to.y),
-                active: true
+                active: true,
+                activity: edgeActivity
             ))
         }
 
         self.nodes = allNodes
         self.links = allLinks
+    }
+}
+
+// MARK: - Activity → visual mapping
+
+/// Brass colour and stroke width derived from a connection count. Keeps
+/// links readable when N=0 (subtle line) and saturates at high N so a
+/// single dominant path doesn't blow out.
+private enum TopoStyle {
+    static func linkColor(activity: Int, fallback: Color) -> Color {
+        guard activity > 0 else { return fallback }
+        let opacity = min(0.85, 0.30 + 0.10 * Double(activity))
+        return ChungHwa.Palette.brass.opacity(opacity)
+    }
+
+    static func linkWidth(activity: Int, inactive: CGFloat = 1.0) -> CGFloat {
+        guard activity > 0 else { return inactive }
+        let bonus = min(2.4, log2(Double(activity + 1)) * 0.6)
+        return 1.2 + CGFloat(bonus)
     }
 }
 
@@ -310,13 +388,19 @@ private struct TopologyDiagram: View {
                     let c1 = CGPoint(x: link.from.x + dx * 0.55, y: link.from.y)
                     let c2 = CGPoint(x: link.to.x   - dx * 0.55, y: link.to.y)
                     path.addCurve(to: link.to, control1: c1, control2: c2)
-                    let color: Color = link.active
-                        ? ChungHwa.Palette.brass.opacity(0.5)
+                    // Inactive links (no `now`) keep the neutral line; active
+                    // links light up proportional to how many connections
+                    // currently traverse them.
+                    let fallback: Color = link.active
+                        ? ChungHwa.Palette.brass.opacity(0.30)
                         : ChungHwa.Palette.line
+                    let color = TopoStyle.linkColor(activity: link.activity,
+                                                    fallback: fallback)
+                    let width = TopoStyle.linkWidth(activity: link.activity,
+                                                    inactive: link.active ? 1.2 : 1.0)
                     ctx.stroke(path,
                                with: .color(color),
-                               style: StrokeStyle(lineWidth: link.active ? 1.4 : 1.0,
-                                                  lineCap: .round))
+                               style: StrokeStyle(lineWidth: width, lineCap: .round))
                 }
             }
             .frame(width: model.canvasSize.width, height: model.canvasSize.height)
@@ -391,7 +475,7 @@ private struct NodeCard: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(.horizontal, 11)
-        .modifier(CardChrome(active: true))
+        .modifier(CardChrome(active: true, hasActivity: node.activity > 0))
     }
 
     private var groupBody: some View {
@@ -415,7 +499,10 @@ private struct NodeCard: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(.horizontal, 11)
-        .modifier(CardChrome(active: node.isActive))
+        // Brass border now keys off live connections, not just `now`. A
+        // group with `now` set but zero traffic shows the neutral chrome.
+        .modifier(CardChrome(active: false, hasActivity: node.activity > 0))
+        .overlay(alignment: .topTrailing) { activityBadge }
     }
 
     private var upstreamBody: some View {
@@ -439,7 +526,27 @@ private struct NodeCard: View {
         }
         .padding(.horizontal, 11)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .modifier(CardChrome(active: node.isActive))
+        // Same activity-driven accent as group cards.
+        .modifier(CardChrome(active: false, hasActivity: node.activity > 0))
+        .overlay(alignment: .topTrailing) { activityBadge }
+    }
+
+    /// Small "•N" tag tucked into the top-right corner of group/upstream
+    /// cards when they have live connections. Mono 10pt to harmonize with
+    /// the existing type-tag.
+    @ViewBuilder
+    private var activityBadge: some View {
+        if node.activity > 0 {
+            Text("\u{2022}\(node.activity)")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(ChungHwa.Palette.brass)
+                .padding(.horizontal, 4).padding(.vertical, 1)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(ChungHwa.Palette.brass.opacity(0.12))
+                )
+                .padding(5)
+        }
     }
 
     @ViewBuilder
@@ -460,29 +567,36 @@ private struct NodeCard: View {
 
 // MARK: - Card chrome
 
-/// Bone & Brass card surface with optional brass accent for active path
-/// nodes. Inlined here instead of leaning on `ChCard` because we need a
-/// tighter padding budget and a brass-tinted variant.
+/// Bone & Brass card surface. The brass accent now keys off `hasActivity`
+/// (live connections flowing through the node) rather than just `active`
+/// (group has a `now`). The root card passes `active: true` to keep its
+/// permanent brass treatment regardless of traffic.
 private struct CardChrome: ViewModifier {
+    /// True for the root card (always brass). Group/upstream cards pass
+    /// `false` and let `hasActivity` decide the accent.
     let active: Bool
+    /// True when this node currently carries live connections.
+    let hasActivity: Bool
+
+    private var lit: Bool { active || hasActivity }
 
     func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(active
+                    .fill(lit
                           ? ChungHwa.Palette.brass.opacity(0.10)
                           : ChungHwa.Palette.card)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(active ? ChungHwa.Palette.brass
-                                          : ChungHwa.Palette.line,
-                                  lineWidth: active ? 1 : 0.5)
+                    .strokeBorder(lit ? ChungHwa.Palette.brass
+                                       : ChungHwa.Palette.line,
+                                  lineWidth: lit ? 1 : 0.5)
             )
-            .shadow(color: active
+            .shadow(color: lit
                     ? ChungHwa.Palette.brass.opacity(0.18)
                     : .black.opacity(0.03),
-                    radius: active ? 1 : 0.5, y: 1)
+                    radius: lit ? 1 : 0.5, y: 1)
     }
 }
