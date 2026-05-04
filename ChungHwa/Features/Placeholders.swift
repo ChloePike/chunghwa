@@ -20,7 +20,3 @@ private struct ComingSoon: View {
     }
 }
 
-struct RulesView: View {
-    var body: some View { ComingSoon(title: "Rules", symbol: "list.bullet.rectangle") }
-}
-

@@ -46,6 +46,7 @@ struct ContentView: View {
     let trafficStore = TrafficStore()
     let connectionsStore = ConnectionsStore()
     let configStore = ConfigStore()
+    let ruleStore = RuleStore()
     return ContentView()
         .environment(KernelController(
             resolver: resolver,
@@ -63,5 +64,6 @@ struct ContentView: View {
         .environment(trafficStore)
         .environment(connectionsStore)
         .environment(configStore)
+        .environment(ruleStore)
         .environment(AnonymousMode())
 }

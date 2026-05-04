@@ -124,6 +124,20 @@ actor MihomoAPIClient {
         }
     }
 
+    func rules() async throws -> [MihomoRule] {
+        let r: MihomoRulesResponse = try await sendDecoding("/rules", method: "GET")
+        return r.rules
+    }
+
+    func ruleProviders() async throws -> [MihomoRuleProvider] {
+        let r: MihomoRuleProvidersResponse = try await sendDecoding("/providers/rules", method: "GET")
+        return r.providers.values.sorted { $0.name < $1.name }
+    }
+
+    func updateRuleProvider(name: String) async throws {
+        _ = try await send(makeRequest(path: "/providers/rules/\(escape(name))", method: "PUT"))
+    }
+
     private nonisolated func escape(_ s: String) -> String {
         s.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? s
     }

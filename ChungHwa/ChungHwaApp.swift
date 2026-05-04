@@ -18,6 +18,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.trafficStore)
                 .environment(appDelegate.connectionsStore)
                 .environment(appDelegate.configStore)
+                .environment(appDelegate.ruleStore)
                 .environment(appDelegate.anonymousMode)
         }
 
@@ -44,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let trafficStore: TrafficStore
     let connectionsStore: ConnectionsStore
     let configStore: ConfigStore
+    let ruleStore: RuleStore
     let anonymousMode: AnonymousMode
     let kernel: KernelController
 
@@ -56,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let trafficStore = TrafficStore()
         let connectionsStore = ConnectionsStore()
         let configStore = ConfigStore()
+        let ruleStore = RuleStore()
         let anonymousMode = AnonymousMode()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
@@ -66,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.trafficStore = trafficStore
         self.connectionsStore = connectionsStore
         self.configStore = configStore
+        self.ruleStore = ruleStore
         self.anonymousMode = anonymousMode
         self.kernel = KernelController(
             resolver: resolver,
