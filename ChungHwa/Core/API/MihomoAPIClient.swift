@@ -35,6 +35,28 @@ private nonisolated struct SelectProxyBody: Encodable, Sendable {
 /// `JSONEncoder` does *not* skip nil Optionals automatically (it emits
 /// `"key": null`), so we drive the keyed container manually with
 /// `encodeIfPresent`.
+/// Body for `PATCH /configs` carrying a nested `tun` block. Mihomo accepts a
+/// partial nested object here — fields we omit are left untouched. We always
+/// send the full block we care about so the kernel doesn't end up with a
+/// half-configured TUN (e.g. enabled but with no auto-route).
+private nonisolated struct PatchTunBody: Encodable, Sendable {
+    struct Tun: Encodable, Sendable {
+        let enable: Bool
+        let stack: String
+        let autoRoute: Bool
+        let autoDetectInterface: Bool
+        let dnsHijack: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case enable, stack
+            case autoRoute = "auto-route"
+            case autoDetectInterface = "auto-detect-interface"
+            case dnsHijack = "dns-hijack"
+        }
+    }
+    let tun: Tun
+}
+
 private nonisolated struct PatchConfigBody: Encodable, Sendable {
     var mode: String?
     var logLevel: String?
@@ -122,6 +144,20 @@ actor MihomoAPIClient {
     /// Toggle TCP-concurrent dialing (race multiple TCP streams to a node).
     func setTCPConcurrent(_ enabled: Bool) async throws {
         try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(tcpConcurrent: enabled))
+    }
+
+    /// Toggle TUN mode at runtime via a nested `tun` block PATCH. The kernel
+    /// still needs the bits baked into the start-up yaml (see ConfigComposer)
+    /// for the very first boot — this call only matters once the API is up.
+    func setTUN(enabled: Bool) async throws {
+        let body = PatchTunBody(tun: .init(
+            enable: enabled,
+            stack: "gvisor",
+            autoRoute: true,
+            autoDetectInterface: true,
+            dnsHijack: ["any:53"]
+        ))
+        try await sendVoid("/configs", method: "PATCH", body: body)
     }
 
     /// Switch the upstream choice of a Selector group.

@@ -13,10 +13,20 @@ final class ConfigStore {
     private(set) var allowLan: Bool?
     private(set) var ipv6: Bool?
     private(set) var tcpConcurrent: Bool?
+    /// Persisted user preference. Mirrors `ChungHwa.TunEnabled` UserDefaults
+    /// key — `MihomoConfig.tun` is not modeled, so this is what the UI binds
+    /// against and what `ConfigComposer` injects into the boot yaml.
+    private(set) var tunEnabled: Bool
     private(set) var lastError: String?
     private(set) var isApplyingMode: Bool = false
 
+    static let tunEnabledDefaultsKey = "ChungHwa.TunEnabled"
+
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "config")
+
+    init() {
+        self.tunEnabled = UserDefaults.standard.bool(forKey: Self.tunEnabledDefaultsKey)
+    }
 
     func reset() {
         mode = nil
@@ -24,6 +34,8 @@ final class ConfigStore {
         allowLan = nil
         ipv6 = nil
         tcpConcurrent = nil
+        // tunEnabled is intentionally NOT reset — it's a persisted user pref,
+        // not a runtime mirror like the others.
         lastError = nil
         isApplyingMode = false
     }
@@ -107,6 +119,30 @@ final class ConfigStore {
             ipv6 = previous
             lastError = String(describing: error)
             log.error("set ipv6 \(enabled, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
+        }
+    }
+
+    /// Persist + push the TUN enable flag. The local pref is written
+    /// immediately so subsequent kernel restarts pick it up via the YAML
+    /// composer; on PATCH failure we roll back both the local state and the
+    /// persisted pref.
+    func setTUN(_ enabled: Bool, api: MihomoAPIClient?) async {
+        let previous = tunEnabled
+        tunEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.tunEnabledDefaultsKey)
+        guard let api else {
+            // No live kernel — just keep the persisted pref; next start picks
+            // it up via ConfigComposer.
+            return
+        }
+        do {
+            try await api.setTUN(enabled: enabled)
+            lastError = nil
+        } catch {
+            tunEnabled = previous
+            UserDefaults.standard.set(previous, forKey: Self.tunEnabledDefaultsKey)
+            lastError = String(describing: error)
+            log.error("set tun \(enabled, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
         }
     }
 

@@ -3,15 +3,15 @@ import SwiftUI
 
 // MARK: - MenubarContent (rich SwiftUI popup, MenuBarExtraStyle.window)
 
-/// 中華 菜单栏弹出窗口。固定 320pt 宽，玻璃底 + 大圆角，分七组 section。
-/// 与 ClashMac 同款体验：头部状态、live 流量卡片、网络接管、出站模式、
-/// per-group 节点切换、配置切换、Dashboard / 内核 / 偏好设置。
+/// 中華 菜单栏弹出窗口。固定 280pt 宽，玻璃底 + 大圆角。
+/// 头部（live 流量）→ 快捷开关 → 出站模式 → per-group 节点 → 配置 → 设置 / 退出。
 struct MenubarContent: View {
     @Environment(KernelController.self) private var kernel
     @Environment(SystemProxyController.self) private var systemProxy
     @Environment(ConfigStore.self) private var config
     @Environment(ProfileStore.self) private var profileStore
     @Environment(ProxyStore.self) private var proxyStore
+    @Environment(AnonymousMode.self) private var anon
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +21,8 @@ struct MenubarContent: View {
             MenubarLiveStats()
                 .padding(.top, 4)
 
+            sectionDivider.padding(.vertical, 6)
+            quickToggleRow
             sectionDivider.padding(.vertical, 6)
             modeSection
             sectionDivider.padding(.vertical, 4)
@@ -54,58 +56,67 @@ struct MenubarContent: View {
         }
     }
 
-    // MARK: - Network section
+    // MARK: - Quick toggles row
 
-    private var networkSection: some View {
-        VStack(spacing: 0) {
-            Menu {
-                Button {
-                    if !systemProxy.enabled { systemProxy.toggle() }
-                } label: {
-                    Label("系统代理", systemImage: systemProxy.enabled ? "checkmark" : "")
-                }
-                Button {
-                    // TUN 切换尚未接入 — 占位提示用户
-                } label: {
-                    Label("TUN 模式（暂未接入）", systemImage: "")
-                }
-                .disabled(true)
-            } label: {
-                MenubarRowLabel(
-                    icon: systemProxy.enabled ? "network" : "network.slash",
-                    title: "网络接管",
-                    trailing: systemProxy.enabled ? "系统代理" : "未启用",
-                    showsChevron: true
-                )
+    /// Three compact pills mirroring the toolbar chips: 系统代理 / TUN / 匿名.
+    /// Same on/off visual language as the OverviewView hero pills.
+    private var quickToggleRow: some View {
+        HStack(spacing: 6) {
+            togglePill(
+                label: "系统代理",
+                symbol: "network",
+                on: systemProxy.enabled
+            ) {
+                systemProxy.toggle()
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-
-            Button(action: copyProxyExports) {
-                MenubarRowLabel(
-                    icon: "doc.on.clipboard",
-                    title: "复制代理导出",
-                    trailing: "⌘C",
-                    showsChevron: false
-                )
+            togglePill(
+                label: "TUN",
+                symbol: "shield.lefthalf.filled",
+                on: config.tunEnabled,
+                disabled: kernel.apiClient == nil
+            ) {
+                Task { await config.setTUN(!config.tunEnabled, api: kernel.apiClient) }
             }
-            .buttonStyle(.plain)
-            .keyboardShortcut("c", modifiers: [.command])
+            togglePill(
+                label: "匿名",
+                symbol: "eye.slash",
+                on: anon.enabled
+            ) {
+                anon.enabled.toggle()
+            }
         }
+        .padding(.horizontal, 4)
     }
 
-    private func copyProxyExports() {
-        let port = systemProxy.port
-        let socks = port // mihomo mixed-port 同时承载 SOCKS5
-        let payload = """
-        export http_proxy=http://127.0.0.1:\(port)
-        export https_proxy=http://127.0.0.1:\(port)
-        export all_proxy=socks5://127.0.0.1:\(socks)
-        """
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(payload, forType: .string)
+    private func togglePill(
+        label: String,
+        symbol: String,
+        on: Bool,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.system(size: 10, weight: .medium))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(on ? ChungHwa.Palette.patina : ChungHwa.Palette.faint)
+            .frame(maxWidth: .infinity)
+            .frame(height: 24)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(on ? ChungHwa.Palette.patina.opacity(0.10) : ChungHwa.Palette.fill)
+                    .strokeBorder(on ? ChungHwa.Palette.patina.opacity(0.30) : ChungHwa.Palette.line,
+                                  lineWidth: 0.5)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.45 : 1)
     }
 
     // MARK: - Mode section
@@ -248,140 +259,10 @@ struct MenubarContent: View {
         .menuIndicator(.hidden)
     }
 
-    // MARK: - Dashboard section
-
-    private var dashboardSection: some View {
-        VStack(spacing: 0) {
-            Button(action: showMainWindow) {
-                MenubarRowLabel(
-                    icon: "rectangle.on.rectangle",
-                    title: "中華 Dashboard",
-                    trailing: "⌘M",
-                    showsChevron: false
-                )
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut("m", modifiers: [.command])
-
-            Button(action: openWebDashboard) {
-                MenubarRowLabel(
-                    icon: "safari",
-                    title: "Web Dashboard",
-                    trailing: "⌘D",
-                    showsChevron: false
-                )
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut("d", modifiers: [.command])
-            .disabled(!isRunning)
-        }
-    }
-
-    private func openWebDashboard() {
-        guard let url = URL(string: "http://127.0.0.1:47913/ui") else { return }
-        NSWorkspace.shared.open(url)
-    }
-
-    // MARK: - Kernel section
-
-    private var kernelSection: some View {
-        VStack(spacing: 0) {
-            Menu {
-                Button("启动内核") { Task { await kernel.start() } }
-                    .disabled(isRunningOrStarting)
-                Button("停止内核") { kernel.stop() }
-                    .disabled(!isRunningOrStarting)
-                Button("重启内核") { Task { await kernel.restart() } }
-                    .disabled(!isRunningOrStarting)
-                Divider()
-                Button("重载配置") { Task { await kernel.reload() } }
-                    .disabled(!isRunning)
-                Button("查看日志目录") { openLogsDirectory() }
-            } label: {
-                MenubarRowLabel(
-                    icon: "gearshape.2",
-                    title: "内核管理",
-                    trailing: kernelTrailingLabel,
-                    showsChevron: true
-                )
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-
-            Menu {
-                Button("打开 Application Support") { openAppSupportDirectory() }
-                Button("打开 mihomo 数据目录") { openMihomoDataDirectory() }
-            } label: {
-                MenubarRowLabel(
-                    icon: "folder",
-                    title: "目录位置",
-                    trailing: nil,
-                    showsChevron: true
-                )
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-        }
-    }
-
-    private var kernelTrailingLabel: String {
-        switch kernel.status {
-        case .running:  return "运行中"
-        case .starting: return "启动中"
-        case .failed:   return "失败"
-        case .idle:     return "未运行"
-        }
-    }
-
-    private func openLogsDirectory() {
-        // ChungHwa 不显式写文件日志，统一打到 unified-log；这里打开
-        // ~/Library/Logs/ChungHwa（不存在则降级到上层 Logs 目录）。
-        let fm = FileManager.default
-        let logs = fm.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Logs/ChungHwa", isDirectory: true)
-        let target: URL
-        if fm.fileExists(atPath: logs.path) {
-            target = logs
-        } else {
-            target = fm.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("Logs", isDirectory: true)
-        }
-        NSWorkspace.shared.open(target)
-    }
-
-    private func openAppSupportDirectory() {
-        let dir = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ChungHwa", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        NSWorkspace.shared.open(dir)
-    }
-
-    private func openMihomoDataDirectory() {
-        // mihomo 自带数据目录默认就是 Application Support/ChungHwa（kernel
-        // 由我们复合 config 后启动）。这里直接复用同一路径。
-        openAppSupportDirectory()
-    }
-
     // MARK: - Footer section
 
     private var footerSection: some View {
         VStack(spacing: 0) {
-            // 检查更新（mihomo 内核）— 暂走 Settings 流程，这里只触发后台
-            // checkForUpdates，结果会在主窗口的 Settings 屏显示。
-            Button(action: checkForUpdates) {
-                MenubarRowLabel(
-                    icon: "arrow.down.circle",
-                    title: "检查内核更新",
-                    trailing: "⌘K",
-                    showsChevron: false
-                )
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut("k", modifiers: [.command])
-
             Button(action: openSettings) {
                 MenubarRowLabel(
                     icon: "gearshape",
@@ -407,14 +288,6 @@ struct MenubarContent: View {
         }
     }
 
-    // 简化方案：菜单栏弹窗里没法直接拿 Sidebar selection（跨 Scene 边界），
-    // 这里只把主窗口拉起来。后续可以走 NotificationCenter 跳到 Settings 屏。
-    private func checkForUpdates() {
-        // KernelDownloader 不在本视图的 environment 里（避免再加注入面），
-        // 用 NotificationCenter 通知主窗口去执行；监听端尚未接入时静默。
-        NotificationCenter.default.post(name: .chungHwaCheckKernelUpdate, object: nil)
-    }
-
     private func openSettings() {
         showMainWindow()
     }
@@ -423,18 +296,6 @@ struct MenubarContent: View {
 
     private var sectionDivider: some View {
         Divider().opacity(0.3)
-    }
-
-    private var isRunningOrStarting: Bool {
-        switch kernel.status {
-        case .running, .starting: return true
-        default: return false
-        }
-    }
-
-    private var isRunning: Bool {
-        if case .running = kernel.status { return true }
-        return false
     }
 
     private func showMainWindow() {
@@ -481,12 +342,6 @@ private struct MenubarLiveStats: View {
                 .font(ChungHwa.Typography.mono(10.5))
                 .foregroundStyle(ChungHwa.Palette.brass)
             Spacer(minLength: 0)
-            Image(systemName: "memorychip")
-                .font(.system(size: 10))
-                .foregroundStyle(ChungHwa.Palette.dim)
-            Text(ChFormat.bytes(traffic.memoryInUse))
-                .font(ChungHwa.Typography.mono(10.5))
-                .foregroundStyle(ChungHwa.Palette.dim)
         }
         .padding(.horizontal, 8)
         .monospacedDigit()

@@ -40,6 +40,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.trafficStore)
                 .environment(appDelegate.historyStore)
                 .environment(appDelegate.connectionsStore)
+                .environment(appDelegate.anonymousMode)
         } label: {
             MenubarLabel()
                 .environment(appDelegate.kernel)
@@ -123,7 +124,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        Task { await kernel.start() }
+        Task { @MainActor in
+            await kernel.start()
+            // Re-push the persisted TUN preference once the API is up so the
+            // kernel's runtime state matches what the user toggled previously
+            // (the YAML composer also bakes it in, but this covers reload-only
+            // restarts where the boot config wasn't re-read).
+            await configStore.setTUN(configStore.tunEnabled, api: kernel.apiClient)
+        }
         let hide = UserDefaults.standard.bool(forKey: "ChungHwa.HideDockIcon")
         NSApp.setActivationPolicy(hide ? .accessory : .regular)
 

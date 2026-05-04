@@ -9,17 +9,27 @@ import Foundation
 enum ConfigComposer {
     static func compose(userYaml: String?, externalControllerHostPort: String, secret: String) -> String {
         let bodyRaw = userYaml ?? defaultBody
+        // First strip block-style keys (tun + its children), then inline keys.
+        let withoutBlocks = stripTopLevelBlocks(bodyRaw, keys: ["tun"])
         let stripped = stripTopLevelKeys(
-            bodyRaw,
+            withoutBlocks,
             keys: ["external-controller", "secret"]
         )
         let body = trimmedTrailing(stripped)
+        let tunEnabled = UserDefaults.standard.bool(forKey: ConfigStore.tunEnabledDefaultsKey)
         return """
         \(body)
 
         # === ChungHwa overrides — managed by the app, do not edit ===
         external-controller: \(externalControllerHostPort)
         secret: \(secret)
+        tun:
+          enable: \(tunEnabled)
+          stack: gvisor
+          auto-route: true
+          auto-detect-interface: true
+          dns-hijack:
+            - any:53
         """
     }
 
@@ -34,6 +44,30 @@ enum ConfigComposer {
         out.reserveCapacity(lines.count)
         for line in lines {
             if matchesTopLevelKey(line, keys: keys) { continue }
+            out.append(line)
+        }
+        return out.joined(separator: "\n")
+    }
+
+    /// Remove a top-level block-style mapping (`key:` followed by indented
+    /// child lines) for any key in `keys`. The block ends at the next
+    /// non-empty line at column 0. Used for `tun:` which carries nested
+    /// children (`stack`, `auto-route`, …).
+    private static func stripTopLevelBlocks(_ yaml: String, keys: [String]) -> String {
+        let lines = yaml.split(separator: "\n", omittingEmptySubsequences: false)
+        var out: [Substring] = []
+        out.reserveCapacity(lines.count)
+        var skipping = false
+        for line in lines {
+            if skipping {
+                if line.isEmpty { continue }
+                if let first = line.first, first.isWhitespace { continue }
+                skipping = false
+            }
+            if matchesTopLevelKey(line, keys: keys) {
+                skipping = true
+                continue
+            }
             out.append(line)
         }
         return out.joined(separator: "\n")

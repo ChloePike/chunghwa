@@ -15,6 +15,8 @@ struct SettingsView: View {
     @AppStorage("ChungHwa.HideDockIcon") private var hideDockIcon: Bool = false
 
     @State private var localChecking: Bool = false
+    @State private var grantingPrivileges: Bool = false
+    @State private var privilegeError: String?
 
     var body: some View {
         ScrollView {
@@ -23,6 +25,7 @@ struct SettingsView: View {
                 startupCard
                 updatesCard
                 kernelBinaryCard
+                tunPrivilegeCard
                 resetCard
                 Color.clear.frame(height: 12)
             }
@@ -384,6 +387,78 @@ struct SettingsView: View {
         if panel.runModal() == .OK, let url = panel.url {
             resolver.customPath = url
             Task { await kernel.restart() }
+        }
+    }
+
+    // MARK: - TUN privileges
+
+    private var tunPrivilegeCard: some View {
+        ChCardWithHeader("TUN 与权限",
+                         systemImage: "shield.lefthalf.filled",
+                         iconColor: ChungHwa.Palette.brass) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: tunPrivileged
+                          ? "checkmark.shield.fill"
+                          : "exclamationmark.shield.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(tunPrivileged
+                                         ? ChungHwa.Palette.patina
+                                         : ChungHwa.Palette.earth)
+
+                    Text(tunPrivileged
+                         ? "mihomo 内核 · 已授权 root（TUN 可用）"
+                         : "未授权（TUN 不可用，点击右侧授权）")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(ChungHwa.Palette.text)
+
+                    Spacer(minLength: 8)
+
+                    if !tunPrivileged {
+                        BrassButton(title: grantingPrivileges ? "授权中…" : "授权",
+                                    systemImage: "lock.open") {
+                            Task { await grantPrivileges() }
+                        }
+                        .disabled(grantingPrivileges || kernel.activeBinary == nil)
+                        .opacity(grantingPrivileges ? 0.55 : 1)
+                    }
+                }
+
+                if let err = privilegeError {
+                    Text(err)
+                        .font(.system(size: 11))
+                        .foregroundStyle(ChungHwa.Palette.earth)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Text("授权后 mihomo 以 root 运行，TUN 模式才能创建虚拟网卡。仅本机生效，可随时撤销（chmod u-s）。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 2)
+            .padding(.bottom, 4)
+        }
+    }
+
+    private var tunPrivileged: Bool {
+        guard let path = kernel.activeBinary?.url.path else { return false }
+        return KernelPrivilegeHelper.isPrivileged(path: path)
+    }
+
+    private func grantPrivileges() async {
+        guard let path = kernel.activeBinary?.url.path else { return }
+        grantingPrivileges = true
+        privilegeError = nil
+        defer { grantingPrivileges = false }
+        do {
+            try await KernelPrivilegeHelper.grantPrivileges(path: path)
+            // Restart so the now-setuid binary actually runs as root.
+            await kernel.restart()
+        } catch {
+            privilegeError = (error as NSError).localizedDescription
         }
     }
 

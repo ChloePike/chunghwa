@@ -164,14 +164,33 @@ private struct ToolbarSysProxy: View {
 }
 
 private struct ToolbarTUN: View {
+    @Environment(KernelController.self) private var kernel
+    @Environment(ConfigStore.self) private var config
+
     var body: some View {
+        let kernelReady = kernel.apiClient != nil
+        let on = config.tunEnabled
         Button {
-            // TUN 需要 PrivilegedHelper，M5+
+            // If the kernel binary doesn't have setuid-root yet, TUN can't
+            // actually open /dev/utun — bounce to Settings so the user can
+            // grant privileges instead of leaving them with a silent no-op.
+            if !on, let path = kernel.activeBinary?.url.path,
+               !KernelPrivilegeHelper.isPrivileged(path: path) {
+                NotificationCenter.default.post(
+                    name: .chungHwaSwitchTab,
+                    object: SidebarTab.settings.rawValue
+                )
+                return
+            }
+            Task { await config.setTUN(!on, api: kernel.apiClient) }
         } label: {
-            Image(systemName: "shield.lefthalf.filled")
+            Image(systemName: on ? "shield.lefthalf.filled" : "shield")
+                .foregroundStyle(on
+                                 ? AnyShapeStyle(ChungHwa.Palette.brass)
+                                 : AnyShapeStyle(.primary))
         }
-        .disabled(true)
-        .help("TUN 模式 · 已关（需要特权辅助，M5+）")
+        .disabled(!kernelReady)
+        .help("TUN 模式 · " + (on ? "已开" : "已关") + "（gvisor 栈，需要 root 权限）")
     }
 }
 
