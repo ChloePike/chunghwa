@@ -13,6 +13,7 @@ struct ProfilesView: View {
 
     @State private var pendingDelete: Profile?
     @State private var importError: String?
+    @State private var isTargeted = false
 
     var body: some View {
         ScrollView {
@@ -48,6 +49,15 @@ struct ProfilesView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(ChungHwa.Palette.bg)
+        .onDrop(of: [.fileURL, .url, .text], isTargeted: $isTargeted) { providers in
+            handleDrop(providers: providers)
+        }
+        .overlay {
+            if isTargeted {
+                dropIndicator
+                    .allowsHitTesting(false)
+            }
+        }
         .navigationTitle("Profiles")
         .sheet(isPresented: $showImportURL) {
             ImportURLSheet(
@@ -259,6 +269,99 @@ struct ProfilesView: View {
             RoundedRectangle(cornerRadius: 9)
                 .strokeBorder(ChungHwa.Palette.earth.opacity(0.30), lineWidth: 0.5)
         )
+    }
+
+    // MARK: - Drop indicator
+
+    private var dropIndicator: some View {
+        ZStack {
+            ChungHwa.Palette.bg.opacity(0.55)
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(
+                    ChungHwa.Palette.brass.opacity(0.5),
+                    style: StrokeStyle(lineWidth: 2, dash: [8, 4])
+                )
+                .padding(10)
+            Text("Drop YAML or subscription URL")
+                .font(ChungHwa.Typography.serif(16, weight: .medium))
+                .foregroundStyle(ChungHwa.Palette.text)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(ChungHwa.Palette.card)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(ChungHwa.Palette.brass.opacity(0.5), lineWidth: 0.8)
+                )
+        }
+    }
+
+    // MARK: - Drop handling
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard !providers.isEmpty else { return false }
+        var handled = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                handled = true
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    let url = urlFromItem(item)
+                    guard let url, url.isFileURL else { return }
+                    let ext = url.pathExtension.lowercased()
+                    guard ext == "yaml" || ext == "yml" else { return }
+                    DispatchQueue.main.async {
+                        try? store.addFile(at: url, name: nil)
+                    }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                handled = true
+                provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { item, _ in
+                    guard let url = urlFromItem(item), !url.isFileURL,
+                          let scheme = url.scheme?.lowercased(),
+                          scheme == "http" || scheme == "https"
+                    else { return }
+                    DispatchQueue.main.async {
+                        Task { try? await store.addURL(url, name: nil) }
+                    }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
+                handled = true
+                provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
+                    let text: String?
+                    if let s = item as? String { text = s }
+                    else if let d = item as? Data { text = String(data: d, encoding: .utf8) }
+                    else { text = nil }
+                    guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !trimmed.isEmpty,
+                          let url = URL(string: trimmed),
+                          let scheme = url.scheme?.lowercased(),
+                          scheme == "http" || scheme == "https"
+                    else { return }
+                    DispatchQueue.main.async {
+                        Task { try? await store.addURL(url, name: nil) }
+                    }
+                }
+            }
+        }
+        return handled
+    }
+
+    private func urlFromItem(_ item: NSSecureCoding?) -> URL? {
+        if let url = item as? URL { return url }
+        if let data = item as? Data {
+            if let url = URL(dataRepresentation: data, relativeTo: nil) { return url }
+            if let s = String(data: data, encoding: .utf8),
+               let url = URL(string: s.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                return url
+            }
+        }
+        if let s = item as? String,
+           let url = URL(string: s.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return url
+        }
+        return nil
     }
 
     // MARK: - Actions
