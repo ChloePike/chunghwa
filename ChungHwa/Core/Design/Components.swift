@@ -232,10 +232,22 @@ struct ChSeg<Value: Hashable>: View {
 
 // MARK: - Sparkline (Swift Charts)
 
-struct ChSpark: View {
+/// Equatable so callers can `.equatable()` to short-circuit re-renders when
+/// the latest sample (and the count of samples) hasn't changed. Comparing
+/// the entire array on every body call would defeat the purpose; `count` +
+/// `last` is a near-free hash that catches every meaningful update from
+/// `TrafficStore.append`.
+struct ChSpark: View, Equatable {
     let values: [Double]
     var color: Color = ChungHwa.Palette.patina
     var fill: Color?
+
+    static func == (lhs: ChSpark, rhs: ChSpark) -> Bool {
+        lhs.values.count == rhs.values.count
+            && lhs.values.last == rhs.values.last
+            && lhs.color == rhs.color
+            && lhs.fill == rhs.fill
+    }
 
     var body: some View {
         let f = fill ?? color
@@ -306,8 +318,8 @@ enum ChFormat {
 
     static func rate(_ bps: Int) -> String { bytes(bps) + "/s" }
 
-    static func uptime(since: Date) -> String {
-        let s = Int(Date().timeIntervalSince(since))
+    static func uptime(since: Date, now: Date = Date()) -> String {
+        let s = Int(now.timeIntervalSince(since))
         let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
         if h > 0 { return String(format: "%d:%02d:%02d", h, m, sec) }
         return String(format: "%d:%02d", m, sec)

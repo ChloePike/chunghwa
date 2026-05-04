@@ -113,24 +113,19 @@ final class ProxyStore {
     func proxy(_ name: String) -> MihomoProxy? { snapshotProxies[name] }
 
     private func computeGroupOrder(in all: [String: MihomoProxy]) -> [String] {
-        // Show only Selector groups by default — those are the ones the user
-        // can manually switch. Auto-strategy groups (URLTest / Fallback /
-        // LoadBalance / Relay) are hidden because they pick a node on their
-        // own; surfacing them clutters the UI without giving the user
-        // anything actionable. Configs with deeply-nested auto sub-groups
-        // (very common in subscription bundles) used to render dozens of
-        // rows before this filter.
-        let selectorGroups = all.values.filter { $0.isUserSwitchable }.map(\.name)
+        // Show every group mihomo reports (Selector / URLTest / Fallback /
+        // LoadBalance / Relay) — earlier we filtered to top-level only but
+        // users want to see / switch into auto-strategy sub-groups too.
+        // Only GLOBAL itself is dropped (it's a meta-aggregate).
+        let allGroups = all.values.filter(\.isGroup).map(\.name)
         var seen = Set<String>()
         var ordered: [String] = []
-        // GLOBAL ordering hint: if GLOBAL.all lists groups in a particular
-        // order, mirror that to match config intent.
         if let global = all["GLOBAL"], let members = global.all {
-            for name in members where selectorGroups.contains(name) {
+            for name in members where allGroups.contains(name) {
                 if seen.insert(name).inserted { ordered.append(name) }
             }
         }
-        for name in selectorGroups.sorted() where !seen.contains(name) {
+        for name in allGroups.sorted() where !seen.contains(name) {
             ordered.append(name)
         }
         return ordered.filter { $0 != "GLOBAL" }

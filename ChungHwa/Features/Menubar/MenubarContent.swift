@@ -1,5 +1,4 @@
 import AppKit
-import Charts
 import SwiftUI
 
 // MARK: - MenubarContent (rich SwiftUI popup, MenuBarExtraStyle.window)
@@ -13,32 +12,27 @@ struct MenubarContent: View {
     @Environment(ConfigStore.self) private var config
     @Environment(ProfileStore.self) private var profileStore
     @Environment(ProxyStore.self) private var proxyStore
-    @Environment(TrafficStore.self) private var traffic
-    @Environment(ConnectionsStore.self) private var connectionsStore
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            compactStats
+            // Live-stat strip subscribes to TrafficStore + ConnectionsStore
+            // on its own. Extracted so 1Hz traffic ticks don't recompute
+            // the entire popover (groupSection / profileSection / etc.).
+            MenubarLiveStats()
                 .padding(.top, 8)
 
             sectionDivider.padding(.vertical, 6)
             modeSection
             sectionDivider.padding(.vertical, 4)
-
-            // Group / profile picker — wrapped in a ScrollView so a 20-group
-            // config doesn't make the popup taller than the screen.
-            ScrollView {
-                VStack(spacing: 0) {
-                    groupSection
-                    if !proxyStore.groups.isEmpty {
-                        sectionDivider.padding(.vertical, 4)
-                    }
-                    profileSection
-                }
+            // 直接内联——组多了让弹窗变高，但 ScrollView 在 macOS Tahoe
+            // 这套 .menuBarExtraStyle(.window) 下会把整段塌缩成 0 高度，
+            // 与其折腾不如让它自然顶高。
+            groupSection
+            if !proxyStore.groups.isEmpty {
+                sectionDivider.padding(.vertical, 4)
             }
-            .frame(maxHeight: 240)
-
+            profileSection
             sectionDivider.padding(.vertical, 4)
             footerSection
         }
@@ -50,64 +44,25 @@ struct MenubarContent: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
         )
-        .task {
+        .task(id: kernel.apiClient == nil ? "off" : "on") {
+            // Re-run when kernel readiness flips. **Only** call the refresh
+            // helpers when there's an actual API client — `refresh(api:nil)`
+            // calls `reset()` and would wipe groups the main window just
+            // hydrated.
+            guard kernel.apiClient != nil else { return }
             await proxyStore.refresh(api: kernel.apiClient)
             await config.refresh(api: kernel.apiClient)
         }
-    }
-
-    /// Single-row live stat strip (replaces the chunky liveCard with chart).
-    /// 仅显示连接数 + ↑↓ 实时速率 + 内存，不再画 sparkline——菜单栏弹出窗
-    /// 不需要那个体量。
-    private var compactStats: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "link")
-                .font(.system(size: 10))
-                .foregroundStyle(ChungHwa.Palette.dim)
-            Text("\(connectionsStore.connections.count)")
-                .font(ChungHwa.Typography.mono(11, weight: .semibold))
-                .foregroundStyle(ChungHwa.Palette.text)
-            Text("·").foregroundStyle(ChungHwa.Palette.faint)
-            Text("↑ \(ChFormat.rate(currentUp))")
-                .font(ChungHwa.Typography.mono(10.5))
-                .foregroundStyle(ChungHwa.Palette.patina)
-            Text("↓ \(ChFormat.rate(currentDown))")
-                .font(ChungHwa.Typography.mono(10.5))
-                .foregroundStyle(ChungHwa.Palette.brass)
-            Spacer(minLength: 0)
-            Image(systemName: "memorychip")
-                .font(.system(size: 10))
-                .foregroundStyle(ChungHwa.Palette.dim)
-            Text(ChFormat.bytes(traffic.memoryInUse))
-                .font(ChungHwa.Typography.mono(10.5))
-                .foregroundStyle(ChungHwa.Palette.dim)
-        }
-        .padding(.horizontal, 8)
     }
 
     // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(ChungHwa.Palette.brass.opacity(0.18))
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(ChungHwa.Palette.brass)
-            }
-            .frame(width: 40, height: 40)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(activeProfileName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(ChungHwa.Palette.text)
-                    .lineLimit(1)
-                Text(statusSubtitle)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(ChungHwa.Palette.dim)
-                    .lineLimit(1)
-            }
+            Text(statusSubtitle)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(ChungHwa.Palette.text)
+                .lineLimit(1)
 
             Spacer(minLength: 0)
 
@@ -119,7 +74,7 @@ struct MenubarContent: View {
             }
         }
         .padding(.horizontal, 6)
-        .padding(.top, 4)
+        .padding(.vertical, 4)
     }
 
     private var activeProfileName: String {
@@ -159,96 +114,6 @@ struct MenubarContent: View {
         case .running, .starting: return true
         default: return false
         }
-    }
-
-    // MARK: - Live card
-
-    private var liveCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 上行：连接 + 上行速率 + 累计 ↑
-            HStack(spacing: 6) {
-                Image(systemName: "link")
-                    .font(.system(size: 11))
-                    .foregroundStyle(ChungHwa.Palette.patina)
-                Text("\(connectionsStore.connections.count) 条连接")
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(ChungHwa.Palette.text)
-                Spacer(minLength: 0)
-                Text("↑ \(ChFormat.rate(currentUp))")
-                    .font(ChungHwa.Typography.mono(11))
-                    .foregroundStyle(ChungHwa.Palette.patina)
-                Text("· \(ChFormat.bytes(traffic.totalUp))")
-                    .font(ChungHwa.Typography.mono(10.5))
-                    .foregroundStyle(ChungHwa.Palette.faint)
-            }
-
-            // sparkline
-            sparkline.frame(height: 60)
-
-            // 下行：内存 + 下行速率 + 累计 ↓
-            HStack(spacing: 6) {
-                Image(systemName: "memorychip")
-                    .font(.system(size: 11))
-                    .foregroundStyle(ChungHwa.Palette.brass)
-                Text(ChFormat.bytes(traffic.memoryInUse))
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(ChungHwa.Palette.text)
-                Spacer(minLength: 0)
-                Text("↓ \(ChFormat.rate(currentDown))")
-                    .font(ChungHwa.Typography.mono(11))
-                    .foregroundStyle(ChungHwa.Palette.brass)
-                Text("· \(ChFormat.bytes(traffic.totalDown))")
-                    .font(ChungHwa.Typography.mono(10.5))
-                    .foregroundStyle(ChungHwa.Palette.faint)
-            }
-        }
-        .padding(10)
-        .background(ChungHwa.Palette.cardSoft,
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
-        )
-    }
-
-    private var currentUp: Int { traffic.current?.upBps ?? 0 }
-    private var currentDown: Int { traffic.current?.downBps ?? 0 }
-
-    private var sparkline: some View {
-        let recent = traffic.samples.suffix(60)
-        let points = Array(recent.enumerated())
-        return Chart {
-            ForEach(points, id: \.offset) { idx, s in
-                AreaMark(x: .value("i", idx),
-                         y: .value("up", s.upBps),
-                         series: .value("series", "up"))
-                    .foregroundStyle(.linearGradient(
-                        colors: [ChungHwa.Palette.patina.opacity(0.32),
-                                 ChungHwa.Palette.patina.opacity(0)],
-                        startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("i", idx),
-                         y: .value("up", s.upBps),
-                         series: .value("series", "up"))
-                    .foregroundStyle(ChungHwa.Palette.patina)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-
-                AreaMark(x: .value("i", idx),
-                         y: .value("down", s.downBps),
-                         series: .value("series", "down"))
-                    .foregroundStyle(.linearGradient(
-                        colors: [ChungHwa.Palette.brass.opacity(0.32),
-                                 ChungHwa.Palette.brass.opacity(0)],
-                        startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("i", idx),
-                         y: .value("down", s.downBps),
-                         series: .value("series", "down"))
-                    .foregroundStyle(ChungHwa.Palette.brass)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-            }
-        }
-        .chartXAxis(.hidden)
-        .chartYAxis(.hidden)
-        .chartLegend(.hidden)
     }
 
     // MARK: - Network section
@@ -307,13 +172,12 @@ struct MenubarContent: View {
 
     // MARK: - Mode section
 
-    /// Inline 3-button mode picker — keeps Direct / Rule / Global one click
-    /// away from the menubar instead of buried in a submenu.
+    /// Mode picker as a popup menu — click the right-side label to drop a
+    /// 3-option select.
     private var modeSection: some View {
-        let active = config.mode
         let kernelReady = kernel.apiClient != nil
         return HStack(spacing: 4) {
-            Image(systemName: "shippingbox")
+            Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .frame(width: 14)
@@ -326,7 +190,7 @@ struct MenubarContent: View {
                     Text(mode.displayName).tag(Optional(mode))
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
             .disabled(!kernelReady)
@@ -582,7 +446,7 @@ struct MenubarContent: View {
 
             Button(action: openSettings) {
                 MenubarRowLabel(
-                    icon: "slider.horizontal.3",
+                    icon: "gearshape",
                     title: "设置",
                     trailing: "⌘,",
                     showsChevron: false
@@ -652,6 +516,45 @@ extension Notification.Name {
     static let chungHwaCheckKernelUpdate = Notification.Name("ChungHwa.CheckKernelUpdate")
 }
 
+// MARK: - Live stats strip
+
+/// Compact live-stat strip extracted as a leaf so the surrounding popover
+/// (group/profile menus etc.) does not re-evaluate when TrafficStore or
+/// ConnectionsStore tick at 1Hz. Only this view subscribes to those stores.
+private struct MenubarLiveStats: View {
+    @Environment(TrafficStore.self) private var traffic
+    @Environment(ConnectionsStore.self) private var connectionsStore
+
+    var body: some View {
+        let up = traffic.current?.upBps ?? 0
+        let down = traffic.current?.downBps ?? 0
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.left.arrow.right")
+                .font(.system(size: 10))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Text("\(connectionsStore.connections.count)")
+                .font(ChungHwa.Typography.mono(11, weight: .semibold))
+                .foregroundStyle(ChungHwa.Palette.text)
+            Text("·").foregroundStyle(ChungHwa.Palette.faint)
+            Text("↑ \(ChFormat.rate(up))")
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.patina)
+            Text("↓ \(ChFormat.rate(down))")
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.brass)
+            Spacer(minLength: 0)
+            Image(systemName: "memorychip")
+                .font(.system(size: 10))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Text(ChFormat.bytes(traffic.memoryInUse))
+                .font(ChungHwa.Typography.mono(10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+        }
+        .padding(.horizontal, 8)
+        .monospacedDigit()
+    }
+}
+
 // MARK: - Row primitive
 
 /// 单行菜单项的显示标签：左 icon、中 title、右可选 trailing label + chevron。
@@ -712,6 +615,44 @@ struct MenubarIconName {
         case .starting:  return "shield"
         case .idle:      return "shield"
         case .running:   return systemProxy.enabled ? "shield.lefthalf.filled" : "shield"
+        }
+    }
+}
+
+// MARK: - Menubar status bar label (icon + ↑↓ speeds)
+
+/// macOS 菜单栏右上角的状态项：盾形图标 + 实时上下行速率（紧凑两行）。
+/// 内容随 TrafficStore.current 每秒更新；kernel 没跑时只显图标省空间。
+struct MenubarLabel: View {
+    @Environment(KernelController.self) private var kernel
+    @Environment(SystemProxyController.self) private var systemProxy
+    @Environment(TrafficStore.self) private var traffic
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: MenubarIconName.current(
+                kernel: kernel,
+                systemProxy: systemProxy))
+            if kernel.apiClient != nil {
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text("↑ \(short(traffic.current?.upBps ?? 0))")
+                    Text("↓ \(short(traffic.current?.downBps ?? 0))")
+                }
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .lineSpacing(-1)
+                .monospacedDigit()
+            }
+        }
+    }
+
+    /// 紧凑速率：菜单栏空间小，三位以内 + 单位。0 → "0"，<1 KB/s → "B"。
+    private func short(_ bps: Int) -> String {
+        switch bps {
+        case 0:               return "0"
+        case ..<1024:         return "\(bps)B"
+        case ..<1_048_576:    return String(format: "%.0fK", Double(bps) / 1024)
+        case ..<1_073_741_824: return String(format: "%.1fM", Double(bps) / 1_048_576)
+        default:               return String(format: "%.1fG", Double(bps) / 1_073_741_824)
         }
     }
 }

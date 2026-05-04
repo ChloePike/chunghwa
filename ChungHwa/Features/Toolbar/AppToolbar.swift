@@ -109,7 +109,10 @@ private struct ToolbarProfile: View {
                 onSwitchToProfiles?()
             }
         } label: {
+            // Label 默认在 macOS toolbar Menu 里只显 icon；强制
+            // titleAndIcon 让当前 profile 名出现在 toolbar 上。
             Label(name, systemImage: "doc.text")
+                .labelStyle(.titleAndIcon)
         }
         .help("当前配置 — 点击切换")
     }

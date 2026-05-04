@@ -26,10 +26,10 @@ struct SettingsView: View {
                 resetCard
                 Color.clear.frame(height: 12)
             }
-            .padding(20)
-            .frame(maxWidth: 720, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .top)
         .background(ChungHwa.Palette.bg)
     }
 
@@ -391,7 +391,7 @@ struct SettingsView: View {
 
     private var resetCard: some View {
         ChCardWithHeader("存储",
-                         systemImage: "folder",
+                         systemImage: "internaldrive",
                          iconColor: ChungHwa.Palette.patina) {
             HStack(spacing: 10) {
                 Text("打开 Application Support 目录以查看日志、配置和托管内核。")

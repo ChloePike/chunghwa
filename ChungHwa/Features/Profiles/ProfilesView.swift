@@ -239,7 +239,7 @@ struct ProfilesView: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "doc.text")
+            Image(systemName: "tray.and.arrow.down")
                 .font(.system(size: 34, weight: .light))
                 .foregroundStyle(ChungHwa.Palette.faint)
             Text("还没有配置")
@@ -468,7 +468,7 @@ private struct ProfileCard: View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(ChungHwa.Palette.fill)
-            Image(systemName: profile.source.subscriptionURL == nil ? "doc.text" : "globe")
+            Image(systemName: profile.source.subscriptionURL == nil ? "doc.text" : "link")
                 .font(.system(size: 14))
                 .foregroundStyle(ChungHwa.Palette.dim)
         }

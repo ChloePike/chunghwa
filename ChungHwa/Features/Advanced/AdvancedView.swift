@@ -78,7 +78,7 @@ struct AdvancedView: View {
 
     private var kernelLogs: some View {
         AdvSection(title: "内核日志") {
-            AdvRow(icon: "list.bullet",
+            AdvRow(icon: "dial.medium",
                    iconColor: ChungHwa.Palette.brass,
                    label: "日志级别",
                    sub: "详细输出写入 ~/Library/Logs/ChungHwa") {
@@ -91,7 +91,7 @@ struct AdvancedView: View {
                 ])
             }
             FootnoteRow(text: "实时同步至 mihomo · 启动时从 /configs 拉回")
-            AdvRow(icon: "doc.text",
+            AdvRow(icon: "doc.text.magnifyingglass",
                    iconColor: ChungHwa.Palette.patina,
                    label: "查看内核日志",
                    last: true) {
@@ -104,13 +104,13 @@ struct AdvancedView: View {
 
     private var connectionOptimization: some View {
         AdvSection(title: "连接优化") {
-            AdvRow(icon: "arrow.triangle.2.circlepath",
+            AdvRow(icon: "gauge.with.dots.needle.50percent",
                    iconColor: ChungHwa.Palette.patina,
                    label: "统一延迟测试",
                    sub: "需要重启内核") {
                 Switch(isOn: $unifiedDelay)
             }
-            AdvRow(icon: "link",
+            AdvRow(icon: "arrow.triangle.branch",
                    iconColor: ChungHwa.Palette.brass,
                    label: "TCP 并发连接",
                    sub: "对所选节点开多条 TCP 流") {
@@ -121,7 +121,7 @@ struct AdvancedView: View {
                    label: "IPv6 支持") {
                 Switch(isOn: $ipv6)
             }
-            AdvRow(icon: "cube",
+            AdvRow(icon: "bolt.horizontal",
                    iconColor: ChungHwa.Palette.brass,
                    label: "禁用 QUIC",
                    sub: "部分网络限速 QUIC，回落 TCP 更稳",
@@ -154,7 +154,7 @@ struct AdvancedView: View {
                    sub: "捕获系统所有 DNS 流量") {
                 Switch(isOn: $dnsHijack)
             }
-            AdvRow(icon: "network",
+            AdvRow(icon: "server.rack",
                    iconColor: ChungHwa.Palette.patina,
                    label: "上游解析器",
                    sub: "每行一条；支持 DoH、DoT、DoQ",
@@ -170,7 +170,7 @@ struct AdvancedView: View {
 
     private var lanInbound: some View {
         AdvSection(title: "局域网入站") {
-            AdvRow(icon: "network",
+            AdvRow(icon: "dot.radiowaves.left.and.right",
                    iconColor: lan ? ChungHwa.Palette.brass : ChungHwa.Palette.patina,
                    label: "允许局域网连接",
                    sub: lan
@@ -185,12 +185,12 @@ struct AdvancedView: View {
 
     private var proxyAuth: some View {
         AdvSection(title: "代理认证") {
-            AdvRow(icon: "shield",
+            AdvRow(icon: "person",
                    iconColor: ChungHwa.Palette.patina,
                    label: "用户名") {
                 TextInputField(text: $authUser, placeholder: "可选")
             }
-            AdvRow(icon: "shield",
+            AdvRow(icon: "key.horizontal",
                    iconColor: ChungHwa.Palette.brass,
                    label: "密码") {
                 TextInputField(text: $authPass,
@@ -481,21 +481,35 @@ private struct Switch: View {
     }
 }
 
-// MARK: - Stepper (cycles through fixed options)
+// MARK: - Stepper (real dropdown picker)
 
+/// Actually a popup picker — keeps the original name to avoid touching the
+/// call sites. Earlier this was a click-to-cycle button which gave no way to
+/// jump straight to a specific option; now it's a Menu with `.fixedSize`
+/// chrome matching the design.
 private struct Stepper: View {
     @Binding var value: String
     let options: [(value: String, label: String)]
 
     var body: some View {
-        Button {
-            let i = options.firstIndex(where: { $0.value == value }) ?? -1
-            value = options[(i + 1) % options.count].value
+        Menu {
+            ForEach(options, id: \.value) { opt in
+                Button {
+                    value = opt.value
+                } label: {
+                    if opt.value == value {
+                        Label(opt.label, systemImage: "checkmark")
+                    } else {
+                        Text(opt.label)
+                    }
+                }
+            }
         } label: {
             HStack(spacing: 6) {
                 Text(options.first(where: { $0.value == value })?.label ?? value)
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(ChungHwa.Palette.text)
+                    .lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 9))
                     .foregroundStyle(ChungHwa.Palette.faint)
@@ -511,8 +525,11 @@ private struct Stepper: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
             )
+            .contentShape(RoundedRectangle(cornerRadius: 6))
         }
-        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 }
 

@@ -24,7 +24,7 @@ struct ProxiesView: View {
     @Environment(ProxyStore.self) private var store
 
     @State private var query: String = ""
-    @State private var sort: ProxySort = .latency
+    @State private var sort: ProxySort = .defaultOrder
     @State private var view: ProxyViewMode = .grid
     @State private var openMap: [String: Bool] = [:]
 
@@ -77,10 +77,8 @@ struct ProxiesView: View {
                             query: query,
                             sort: sort,
                             mode: view,
-                            isOpen: Binding(
-                                get: { openMap[group.name] ?? false },
-                                set: { openMap[group.name] = $0 }
-                            )
+                            isOpen: openMap[group.name] ?? false,
+                            onToggle: { isOpen in openMap[group.name] = isOpen }
                         )
                     }
                 }
@@ -153,21 +151,20 @@ struct ProxiesView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "bolt.fill").font(.system(size: 11, weight: .semibold))
-                    Text("测全部").font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .frame(height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(ChungHwa.Palette.brass)
-                        .shadow(color: ChungHwa.Palette.brass.opacity(0.35), radius: 1, y: 1)
-                )
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(ChungHwa.Palette.brass)
+                            .shadow(color: ChungHwa.Palette.brass.opacity(0.35), radius: 1, y: 1)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             .disabled(kernel.apiClient == nil)
+            .help("测试所有组延迟")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
@@ -196,7 +193,7 @@ struct ProxiesView: View {
 
     private var noGroupsState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "tray")
+            Image(systemName: "rectangle.stack.badge.minus")
                 .font(.system(size: 44)).foregroundStyle(ChungHwa.Palette.faint)
             Text("暂无代理分组")
                 .font(.system(size: 15, weight: .semibold))
@@ -309,7 +306,8 @@ private struct ProxyGroupCard: View {
     let query: String
     let sort: ProxySort
     let mode: ProxyViewMode
-    @Binding var isOpen: Bool
+    let isOpen: Bool
+    let onToggle: (Bool) -> Void
 
     @Environment(KernelController.self) private var kernel
     @Environment(ProxyStore.self) private var store
@@ -371,7 +369,7 @@ private struct ProxyGroupCard: View {
     private var header: some View {
         HStack(spacing: 12) {
             Button {
-                withAnimation(.snappy(duration: 0.18)) { isOpen.toggle() }
+                withAnimation(.snappy(duration: 0.18)) { onToggle(!isOpen) }
             } label: {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .bold))
@@ -418,7 +416,7 @@ private struct ProxyGroupCard: View {
         .padding(.vertical, 11)
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(.snappy(duration: 0.18)) { isOpen.toggle() }
+            withAnimation(.snappy(duration: 0.18)) { onToggle(!isOpen) }
         }
     }
 
@@ -466,29 +464,27 @@ private struct ProxyGroupCard: View {
         Button {
             Task { await store.testGroup(group.name, api: kernel.apiClient) }
         } label: {
-            HStack(spacing: 5) {
+            Group {
                 if isTesting {
                     ProgressView().controlSize(.mini).scaleEffect(0.7)
-                        .frame(width: 11, height: 11)
                 } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10, weight: .semibold))
+                    Image(systemName: "bolt.horizontal")
+                        .font(.system(size: 11, weight: .semibold))
                 }
-                Text(isTesting ? "测试中" : "测试")
-                    .font(.system(size: 11, weight: .medium))
             }
             .foregroundStyle(ChungHwa.Palette.text)
-            .padding(.horizontal, 10)
-            .frame(height: 26)
+            .frame(width: 26, height: 26)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(ChungHwa.Palette.fill)
                     .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
             )
             .opacity(isTesting ? 0.6 : 1)
+            .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .disabled(isTesting || kernel.apiClient == nil)
+        .help(isTesting ? "测试中…" : "测试该组延迟")
     }
 
     // MARK: body
@@ -515,6 +511,7 @@ private struct ProxyGroupCard: View {
                         isTesting: isTesting,
                         onSelect: { select(name) }
                     )
+                    .equatable()
                 }
             }
             .padding(10)
@@ -530,6 +527,7 @@ private struct ProxyGroupCard: View {
                         isTesting: isTesting,
                         onSelect: { select(name) }
                     )
+                    .equatable()
                 }
             }
             .padding(6)
@@ -563,7 +561,7 @@ private struct ProxyGroupCard: View {
 
 // MARK: - Node card (grid)
 
-private struct NodeCard: View {
+private struct NodeCard: View, Equatable {
     let name: String
     let proxy: MihomoProxy?
     let isSelected: Bool
@@ -572,6 +570,15 @@ private struct NodeCard: View {
     let onSelect: () -> Void
 
     @State private var shimmer: Bool = false
+
+    /// 组列表 1Hz 抖动时只让真有变化的卡重渲。
+    static func == (lhs: NodeCard, rhs: NodeCard) -> Bool {
+        lhs.name == rhs.name
+            && lhs.proxy?.lastDelay == rhs.proxy?.lastDelay
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isSwitchable == rhs.isSwitchable
+            && lhs.isTesting == rhs.isTesting
+    }
 
     private var pingValue: Int { proxy?.lastDelay ?? 0 }
     private var pingColor: Color {
@@ -705,13 +712,21 @@ private struct NodeCard: View {
 
 // MARK: - Node row (list)
 
-private struct NodeRow: View {
+private struct NodeRow: View, Equatable {
     let name: String
     let proxy: MihomoProxy?
     let isSelected: Bool
     let isSwitchable: Bool
     let isTesting: Bool
     let onSelect: () -> Void
+
+    static func == (lhs: NodeRow, rhs: NodeRow) -> Bool {
+        lhs.name == rhs.name
+            && lhs.proxy?.lastDelay == rhs.proxy?.lastDelay
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isSwitchable == rhs.isSwitchable
+            && lhs.isTesting == rhs.isTesting
+    }
 
     private var pingValue: Int { proxy?.lastDelay ?? 0 }
     private var pingColor: Color {

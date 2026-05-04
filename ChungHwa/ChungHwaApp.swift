@@ -41,9 +41,10 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.historyStore)
                 .environment(appDelegate.connectionsStore)
         } label: {
-            Image(systemName: MenubarIconName.current(
-                kernel: appDelegate.kernel,
-                systemProxy: appDelegate.systemProxy))
+            MenubarLabel()
+                .environment(appDelegate.kernel)
+                .environment(appDelegate.systemProxy)
+                .environment(appDelegate.trafficStore)
         }
         .menuBarExtraStyle(.window)
     }
@@ -111,7 +112,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.loginItem = LoginItemController()
         super.init()
-        networkStatusStore.startAutoRefresh()
+        // Defer the first NetworkStatusStore probe by ~2s so the launch
+        // frame doesn't have to compete with /route lookups + URLSessions
+        // firing at the same instant the kernel starts. The 30s recurring
+        // cadence is unchanged.
+        Task { @MainActor [networkStatusStore] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            networkStatusStore.startAutoRefresh()
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

@@ -36,7 +36,7 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             SettingsFooter(selection: $selection)
         }
-        .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+        .navigationSplitViewColumnWidth(min: 140, ideal: 160, max: 200)
     }
 }
 

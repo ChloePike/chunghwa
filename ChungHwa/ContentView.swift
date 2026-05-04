@@ -8,6 +8,16 @@ final class BannerBus {
 
     func post(level: Level, source: String, message: String?) {
         guard let message, !message.isEmpty else { return }
+        // De-dupe identical back-to-back posts: when a store re-emits the
+        // same lastError on a refresh, we'd otherwise reset the entry's
+        // `posted` and re-trigger the snappy in/out animation for no
+        // user-visible change.
+        if let cur = current,
+           cur.level == level,
+           cur.source == source,
+           cur.message == message {
+            return
+        }
         current = (level: level, source: source, message: message, posted: Date())
     }
 
@@ -38,6 +48,12 @@ struct ContentView: View {
                 OnboardingHost(onCreate: { selection = .profiles })
                 detailScreen
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Tab switches feel snappier with a short cross-fade
+                    // anchored to the tab id so SwiftUI animates the swap
+                    // rather than blink-rebuilding.
+                    .id(currentTab)
+                    .transition(.opacity)
+                    .animation(.smooth(duration: 0.14), value: currentTab)
                 StatusBar()
             }
         }

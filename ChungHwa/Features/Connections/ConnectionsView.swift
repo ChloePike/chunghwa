@@ -1,4 +1,3 @@
-import Combine
 import SwiftUI
 
 /// Bone & Brass on Patina reskin of the Connections screen.
@@ -17,6 +16,7 @@ struct ConnectionsView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(ConnectionsStore.self) private var store
     @Environment(AnonymousMode.self) private var anon
+    @Environment(GeoIPStore.self) private var geo
 
     @State private var paused: Bool = false
     /// Snapshot frozen at the moment the user pressed pause. Cleared when they
@@ -72,6 +72,15 @@ struct ConnectionsView: View {
             if !Task.isCancelled {
                 debouncedQuery = query
             }
+        }
+        // Feed currently-visible destination IPs to the GeoIP store. The store
+        // de-dupes against its cache, so this is cheap to call on every
+        // snapshot tick. Re-keys on connection count — granular enough to
+        // pick up newly-opened connections without thrashing on byte-counter
+        // updates.
+        .task(id: store.connections.count) {
+            let ips = Set(store.connections.compactMap { $0.metadata.destinationIP })
+            geo.resolve(ips: ips)
         }
     }
 
@@ -241,14 +250,21 @@ struct ConnectionsView: View {
                            system: "powerplug",
                            subtitle: "mihomo 启动后连接会显示在这里。")
             } else {
-                VStack(spacing: 0) {
-                    headerRow
-                    if rows.isEmpty {
-                        emptyState(title: "无活跃连接",
-                                   system: "link.circle",
-                                   subtitle: "访问网站后会显示被代理的连接。")
-                    } else {
-                        rowList
+                // Compute column widths ONCE from the card's frame and feed
+                // them into header + every row. Replaces a per-row
+                // GeometryReader (one per visible row × every store tick)
+                // with a single layout pass at the card level.
+                GeometryReader { geo in
+                    let widths = ConnectionsColumnWidths(totalWidth: geo.size.width)
+                    VStack(spacing: 0) {
+                        headerRow(widths: widths)
+                        if rows.isEmpty {
+                            emptyState(title: "无活跃连接",
+                                       system: "link.circle",
+                                       subtitle: "访问网站后会显示被代理的连接。")
+                        } else {
+                            rowList(widths: widths)
+                        }
                     }
                 }
             }
@@ -256,9 +272,11 @@ struct ConnectionsView: View {
         .frame(maxHeight: .infinity)
     }
 
-    private var headerRow: some View {
+    private func headerRow(widths: ConnectionsColumnWidths) -> some View {
         ConnectionsGridRow(
+            widths:  widths,
             dot:     { Color.clear.frame(width: 12, height: 12) },
+            region:  { headerCell("地区", alignment: .center) },
             host:    { headerCell("主机", alignment: .leading) },
             process: { headerCell("进程", alignment: .leading) },
             down:    { headerCell("下载", alignment: .trailing) },
@@ -283,7 +301,7 @@ struct ConnectionsView: View {
             .frame(maxWidth: .infinity, alignment: alignment)
     }
 
-    private var rowList: some View {
+    private func rowList(widths: ConnectionsColumnWidths) -> some View {
         // Cache the visible array once per body rather than re-reading the
         // computed property six times below. With LazyVStack iterating, the
         // ForEach only materialises the on-screen window; the cached array is
@@ -297,8 +315,10 @@ struct ConnectionsView: View {
                 ForEach(visible) { row in
                     ConnectionRow(
                         row: row,
+                        widths: widths,
                         anonEnabled: anonEnabled,
                         isSelected: row.id == currentSelection,
+                        country: geo.country(for: row.metadata.destinationIP ?? ""),
                         onTap: {
                             select(row)
                             listFocused = true
@@ -359,35 +379,43 @@ struct ConnectionsView: View {
             rows.first(where: { $0.id == id })
         }
 
-        Button("复制主机") {
+        Button {
             let value = conns
                 .map { $0.metadata.host ?? $0.metadata.destinationIP ?? "—" }
                 .joined(separator: "\n")
             Self.copy(value)
+        } label: {
+            Label("复制主机", systemImage: "globe")
         }
         .disabled(conns.isEmpty)
 
-        Button("复制 IP") {
+        Button {
             let value = conns
                 .map { $0.metadata.destinationIP ?? "—" }
                 .joined(separator: "\n")
             Self.copy(value)
+        } label: {
+            Label("复制 IP", systemImage: "number")
         }
         .disabled(conns.isEmpty)
 
-        Button("复制 主机:端口") {
+        Button {
             let value = conns.map { $0.destination }.joined(separator: "\n")
             Self.copy(value)
+        } label: {
+            Label("复制 主机:端口", systemImage: "doc.on.clipboard")
         }
         .disabled(conns.isEmpty)
 
-        Button("复制链路") {
+        Button {
             let value = conns.map { $0.chainPath }.joined(separator: "\n")
             Self.copy(value)
+        } label: {
+            Label("复制链路", systemImage: "point.3.connected.trianglepath.dotted")
         }
         .disabled(conns.isEmpty)
 
-        Button("复制 JSON") {
+        Button {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let pieces: [String] = conns.compactMap { conn in
@@ -395,16 +423,20 @@ struct ConnectionsView: View {
                 return String(data: data, encoding: .utf8)
             }
             Self.copy(pieces.joined(separator: "\n"))
+        } label: {
+            Label("复制 JSON", systemImage: "curlybraces")
         }
         .disabled(conns.isEmpty)
 
         Divider()
 
-        Button("关闭连接", role: .destructive) {
+        Button(role: .destructive) {
             let api = kernel.apiClient
             for id in ids {
                 Task { await store.close(id: id, api: api) }
             }
+        } label: {
+            Label("关闭连接", systemImage: "xmark.circle")
         }
         .disabled(ids.isEmpty)
     }
@@ -511,8 +543,12 @@ struct ConnectionsView: View {
 /// of a connection so we don't bother diffing them.
 private struct ConnectionRow: View, Equatable {
     let row: MihomoConnection
+    let widths: ConnectionsColumnWidths
     let anonEnabled: Bool
     let isSelected: Bool
+    /// ISO 3166-1 alpha-2 code (e.g. "JP", "US") or the sentinel "LAN" for
+    /// private addresses. nil while the lookup is still in flight.
+    let country: String?
     let onTap: () -> Void
     let contextMenu: () -> AnyView
 
@@ -522,13 +558,22 @@ private struct ConnectionRow: View, Equatable {
             && lhs.row.download == rhs.row.download
             && lhs.isSelected == rhs.isSelected
             && lhs.anonEnabled == rhs.anonEnabled
+            && lhs.country == rhs.country
+            && lhs.widths == rhs.widths
     }
 
     var body: some View {
         ConnectionsGridRow(
+            widths: widths,
             dot: {
                 ChDot(color: ChungHwa.Palette.patina, size: 6, pulse: true)
                     .frame(width: 12, height: 12)
+            },
+            region: {
+                Text(regionGlyph)
+                    .font(.system(size: 13))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .help(country ?? "")
             },
             host: {
                 Text(hostText)
@@ -593,20 +638,69 @@ private struct ConnectionRow: View, Equatable {
 
     private var hostText: String { row.destination }
     private var processText: String { row.metadata.process ?? "—" }
+
+    /// Single-glyph rendering for the region column. "LAN" sentinel becomes
+    /// a house emoji; a real ISO code becomes the regional-indicator flag;
+    /// a still-pending lookup or missing IP renders empty so the column
+    /// just stays blank rather than thrashing.
+    private var regionGlyph: String {
+        guard let country, !country.isEmpty else { return "" }
+        if country == "LAN" { return "🏠" }
+        return Self.flag(country)
+    }
+
+    /// Convert an ISO 3166-1 alpha-2 country code to a regional-indicator
+    /// flag emoji. "JP" → 🇯🇵. Returns "" for inputs that aren't two ASCII
+    /// letters so we never render a half-broken codepoint.
+    private static func flag(_ iso: String) -> String {
+        let upper = iso.uppercased()
+        guard upper.count == 2 else { return "" }
+        let base: UInt32 = 0x1F1E6 - 0x41
+        var out = ""
+        for ch in upper.unicodeScalars {
+            guard (0x41...0x5A).contains(ch.value),
+                  let scalar = Unicode.Scalar(base + ch.value)
+            else { return "" }
+            out.unicodeScalars.append(scalar)
+        }
+        return out
+    }
 }
 
-// MARK: - Shared 6-column grid
+// MARK: - Shared 7-column grid
 
-/// Lays out the 6 columns from the JSX
-/// (`gridTemplateColumns: "12px 1.6fr 1fr 80px 80px 90px"`).
-///
-/// SwiftUI has no direct equivalent of CSS `fr` units, but combining
-/// `frame(maxWidth: .infinity)` with `.layoutPriority` on the two flexible
-/// cells — and giving the 1.6fr cell a higher priority so it grows faster —
-/// produces the same visual proportion at the widths this screen renders at.
-private struct ConnectionsGridRow<Dot: View, Host: View, Process: View,
+/// Pre-computed host / process column widths for the connections grid. The
+/// parent `ConnectionsView.card` runs a SINGLE `GeometryReader` against the
+/// card's width and hands these down to header + every row. Replaces a
+/// per-row `GeometryReader` (one per visible row × every store tick).
+struct ConnectionsColumnWidths: Equatable {
+    let hostW: CGFloat
+    let procW: CGFloat
+
+    init(totalWidth: CGFloat) {
+        let fixedSum: CGFloat = 12 + 36 + 80 + 80 + 90
+        let gapSum: CGFloat = 10 * 6
+        // The row's own .padding(.horizontal, 14) inside its body must be
+        // subtracted from the available space — same arithmetic the
+        // original per-row GeometryReader produced.
+        let cardHPad: CGFloat = 14 * 2
+        let flex = max(0, totalWidth - cardHPad - fixedSum - gapSum)
+        self.hostW = flex * (1.6 / 2.6)
+        self.procW = flex * (1.0 / 2.6)
+    }
+}
+
+/// Lays out the 7 columns: 12px dot · 36px region flag · 1.6fr host · 1fr
+/// process · 80px down · 80px up · 90px rule. The region column is fixed
+/// at 36pt — wide enough for a regional-indicator emoji pair plus a touch
+/// of breathing room without crowding the host name. Column widths are
+/// computed once at the card level (see `ConnectionsColumnWidths`) and
+/// passed in, so this struct does NO per-row geometry work.
+private struct ConnectionsGridRow<Dot: View, Region: View, Host: View, Process: View,
                                   Down: View, Up: View, Rule: View>: View {
+    let widths: ConnectionsColumnWidths
     @ViewBuilder var dot: () -> Dot
+    @ViewBuilder var region: () -> Region
     @ViewBuilder var host: () -> Host
     @ViewBuilder var process: () -> Process
     @ViewBuilder var down: () -> Down
@@ -614,31 +708,17 @@ private struct ConnectionsGridRow<Dot: View, Host: View, Process: View,
     @ViewBuilder var rule: () -> Rule
 
     var body: some View {
-        GeometryReader { geo in
-            // Total width minus the fixed cells (12 + 80 + 80 + 90) and the
-            // five 10pt gaps between six columns. What's left is split 1.6 : 1
-            // between Host and Process.
-            let fixedSum: CGFloat = 12 + 80 + 80 + 90
-            let gapSum: CGFloat = 10 * 5
-            let flex = max(0, geo.size.width - fixedSum - gapSum)
-            let hostW = flex * (1.6 / 2.6)
-            let procW = flex * (1.0 / 2.6)
-
-            HStack(spacing: 10) {
-                dot().frame(width: 12, alignment: .center)
-                host().frame(width: hostW, alignment: .leading)
-                process().frame(width: procW, alignment: .leading)
-                down().frame(width: 80, alignment: .trailing)
-                up().frame(width: 80, alignment: .trailing)
-                rule().frame(width: 90, alignment: .leading)
-            }
+        HStack(spacing: 10) {
+            dot().frame(width: 12, alignment: .center)
+            region().frame(width: 36, alignment: .center)
+            host().frame(width: widths.hostW, alignment: .leading)
+            process().frame(width: widths.procW, alignment: .leading)
+            down().frame(width: 80, alignment: .trailing)
+            up().frame(width: 80, alignment: .trailing)
+            rule().frame(width: 90, alignment: .leading)
         }
-        .frame(height: rowHeight)
+        .frame(height: 18)
     }
-
-    /// Single-line row height. 11.5pt body + comfortable line-height matches
-    /// the design's `padding: 7px 14px` plus text size.
-    private var rowHeight: CGFloat { 18 }
 }
 
 // MARK: - Inspector
@@ -652,14 +732,6 @@ private struct ConnectionInspector: View {
     let anon: Bool
     let closeConnection: () -> Void
     let dismiss: () -> Void
-
-    /// 1Hz tick that drives the elapsed-time counter without re-rendering on
-    /// the global store cadence. We hold the publisher in `@State` rather than
-    /// a `let` so we can explicitly `.upstream.connect().cancel()` in
-    /// `onDisappear` — the inspector is only rendered when a row is selected,
-    /// so closing the panel must stop the tick to avoid a leaked subscription.
-    @State private var now: Date = .init()
-    @State private var tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ChCardWithHeader(
@@ -715,12 +787,6 @@ private struct ConnectionInspector: View {
                 .padding(.top, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
-        .onReceive(tick) { now = $0 }
-        .onDisappear {
-            // Stop the 1Hz timer when the inspector closes so we don't leave
-            // a publisher firing for a view that's no longer on screen.
-            tick.upstream.connect().cancel()
         }
     }
 
@@ -817,7 +883,16 @@ private struct ConnectionInspector: View {
                 }
                 Spacer(minLength: 0)
             }
-            row("时长", valueText(elapsedString))
+            // Elapsed-time owns its own TimelineView so the rest of the
+            // inspector doesn't redraw at 1Hz.
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("时长")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .frame(width: 64, alignment: .leading)
+                ElapsedText(start: connection.start)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -914,10 +989,35 @@ private struct ConnectionInspector: View {
         return "\(head)…\(tail)"
     }
 
-    /// `start` is an ISO-8601 timestamp from mihomo. Falls back to "—" if it
-    /// fails to parse.
-    private var elapsedString: String {
-        guard let started = parseISO(connection.start) else { return "—" }
+}
+
+/// Renders mihomo's connection-elapsed counter without forcing the parent
+/// inspector to redraw every second. Uses a `TimelineView(.periodic)` so
+/// the only thing invalidating per-second is this single Text.
+private struct ElapsedText: View {
+    let start: String
+
+    private var startedAt: Date? { Self.parseISO(start) }
+
+    var body: some View {
+        Group {
+            if let started = startedAt {
+                TimelineView(.periodic(from: started, by: 1.0)) { ctx in
+                    Text(Self.formatElapsed(since: started, now: ctx.date))
+                        .font(ChungHwa.Typography.mono(11))
+                        .foregroundStyle(ChungHwa.Palette.text)
+                        .monospacedDigit()
+                        .textSelection(.enabled)
+                }
+            } else {
+                Text("—")
+                    .font(ChungHwa.Typography.mono(11))
+                    .foregroundStyle(ChungHwa.Palette.text)
+            }
+        }
+    }
+
+    private static func formatElapsed(since started: Date, now: Date) -> String {
         let s = Int(now.timeIntervalSince(started))
         guard s >= 0 else { return "0s" }
         let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
@@ -926,7 +1026,7 @@ private struct ConnectionInspector: View {
         return "\(sec)s"
     }
 
-    private func parseISO(_ s: String) -> Date? {
+    private static func parseISO(_ s: String) -> Date? {
         let f1 = ISO8601DateFormatter()
         f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let d = f1.date(from: s) { return d }
