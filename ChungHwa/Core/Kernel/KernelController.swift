@@ -81,6 +81,12 @@ final class KernelController {
         }
         status = .starting
 
+        // Reap any orphan mihomo from a previous app instance (force-quit /
+        // crash leaves the child running and listening on our port; the new
+        // mihomo then can't bind 47913 and the old one rejects our fresh
+        // secret with 401).
+        killOrphanMihomo()
+
         do {
             try FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
 
@@ -192,6 +198,40 @@ final class KernelController {
 
     private func generateSecret() -> String {
         UUID().uuidString + UUID().uuidString
+    }
+
+    /// Find any mihomo process whose `-d` argument points at our dataDir
+    /// and SIGTERM it. Uses `pgrep -af` so we match the exact subprocess
+    /// invocation; this won't touch other mihomo binaries (Clash Verge etc.)
+    /// because their data-dirs are different.
+    private func killOrphanMihomo() {
+        let pgrep = Process()
+        pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrep.arguments = ["-af", "mihomo.*-d \(dataDir.path)"]
+        let pipe = Pipe()
+        pgrep.standardOutput = pipe
+        pgrep.standardError = Pipe()
+        do {
+            try pgrep.run()
+            pgrep.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let raw = String(data: data, encoding: .utf8) else { return }
+            let pids = raw.split(separator: "\n").compactMap { line -> Int32? in
+                // pgrep -af prints "PID command…" — first token is the PID.
+                guard let pidStr = line.split(separator: " ", maxSplits: 1).first,
+                      let pid = Int32(pidStr) else { return nil }
+                return pid == ProcessInfo.processInfo.processIdentifier ? nil : pid
+            }
+            guard !pids.isEmpty else { return }
+            log.warning("reaping \(pids.count, privacy: .public) orphan mihomo process(es)")
+            for pid in pids {
+                kill(pid, SIGTERM)
+            }
+            // Give them up to 1s to exit cleanly before binding the port.
+            usleep(1_000_000)
+        } catch {
+            log.warning("orphan-cleanup failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     private func waitForReady(client: MihomoAPIClient, timeout: TimeInterval) async throws -> String {

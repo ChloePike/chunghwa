@@ -44,6 +44,8 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             SidebarView(selection: $selection)
+                .ignoresSafeArea(.container, edges: .top)
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             VStack(spacing: 0) {
                 AppToolbar(title: title, onSwitchToProfiles: { selection = .profiles })
@@ -58,7 +60,9 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 StatusBar()
             }
+            .ignoresSafeArea(.container, edges: .top)
         }
+        .toolbar(.hidden, for: .windowToolbar)
         .frame(minWidth: 900, minHeight: 600)
         .task {
             // Hydrate the @State selection from the persisted raw on first
