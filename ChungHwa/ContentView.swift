@@ -24,6 +24,8 @@ struct ContentView: View {
     @Environment(RuleStore.self) private var ruleStore
     @Environment(NotificationCenterStore.self) private var notifications
     @Environment(ProfileStore.self) private var profileStore
+    @Environment(KernelController.self) private var kernelController
+    @Environment(LogStore.self) private var logStore
 
     @AppStorage("ChungHwa.OnboardingDismissed") private var onboardingDismissed: Bool = false
 
@@ -51,6 +53,8 @@ struct ContentView: View {
         }
         .frame(minWidth: 900, minHeight: 600)
         .focusedSceneValue(\.sidebarSelection, $selection)
+        .focusedSceneValue(\.kernelController, kernelController)
+        .focusedSceneValue(\.logStore, logStore)
         .onChange(of: configStore.lastError) { _, m in
             errorBus.post(source: "Config", message: m)
             notifications.post(source: "Config", level: .error, message: m)

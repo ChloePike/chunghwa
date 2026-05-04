@@ -37,6 +37,7 @@ struct LogsView: View {
     @State private var paused = false
     @State private var frozenLines: [LogLine] = []
     @State private var query: String = ""
+    @FocusState private var filterFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -50,6 +51,9 @@ struct LogsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ChungHwa.Palette.bg.ignoresSafeArea())
         .navigationTitle("Logs")
+        .onReceive(NotificationCenter.default.publisher(for: .chungHwaFocusFilter)) { _ in
+            filterFocused = true
+        }
     }
 
     // MARK: - Source
@@ -127,6 +131,7 @@ struct LogsView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(ChungHwa.Palette.text)
+                .focused($filterFocused)
 
             if !query.isEmpty {
                 Button {
