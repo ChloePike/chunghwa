@@ -24,11 +24,13 @@ enum KernelError: Error, CustomStringConvertible {
 final class KernelController {
     private(set) var status: KernelStatus = .idle
     private(set) var apiClient: MihomoAPIClient?
+    private(set) var streamClient: MihomoStreamClient?
     private(set) var activeBinary: KernelBinary?
 
     private var process: Process?
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
+    private var logStreamTask: Task<Void, Never>?
 
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "kernel")
     private let externalControllerPort = 47913
@@ -99,10 +101,13 @@ final class KernelController {
             let baseURL = URL(string: "http://127.0.0.1:\(externalControllerPort)")!
             let client = MihomoAPIClient(baseURL: baseURL, secret: secret)
             self.apiClient = client
+            let stream = MihomoStreamClient(baseURL: baseURL, secret: secret)
+            self.streamClient = stream
 
             let version = try await waitForReady(client: client, timeout: 8)
             status = .running(version: version)
             log.info("mihomo ready version=\(version, privacy: .public)")
+            startLogStream(stream)
         } catch {
             log.error("kernel start failed: \(String(describing: error), privacy: .public)")
             cleanupProcess()
@@ -206,8 +211,27 @@ final class KernelController {
         stderrPipe = nil
         process = nil
         apiClient = nil
+        streamClient = nil
         activeBinary = nil
         runtimeSecret = nil
+        logStreamTask?.cancel()
+        logStreamTask = nil
+    }
+
+    private func startLogStream(_ stream: MihomoStreamClient) {
+        logStreamTask?.cancel()
+        let store = self.logStore
+        logStreamTask = Task {
+            for await event in await stream.logEvents(level: "debug") {
+                let mapped: LogStream = switch event.type.lowercased() {
+                case "warning": .warning
+                case "error":   .error
+                case "debug":   .debug
+                default:        .info
+                }
+                store.append(event.payload, stream: mapped)
+            }
+        }
     }
 
     private func handleTermination(exitCode: Int32) {

@@ -1,8 +1,15 @@
 import Foundation
 import Observation
 
-enum LogStream: String, Sendable {
-    case stdout, stderr
+enum LogStream: String, Sendable, CaseIterable, Identifiable {
+    case stdout, stderr           // process pipes
+    case debug, info, warning, error   // mihomo /logs runtime events
+
+    var id: String { rawValue }
+
+    var isProcessPipe: Bool {
+        self == .stdout || self == .stderr
+    }
 }
 
 struct LogLine: Identifiable, Sendable {
