@@ -24,6 +24,10 @@ private nonisolated struct ReloadConfigBody: Encodable, Sendable {
     let path: String
 }
 
+private nonisolated struct SelectProxyBody: Encodable, Sendable {
+    let name: String
+}
+
 actor MihomoAPIClient {
     let baseURL: URL
     private let secret: String
@@ -50,6 +54,57 @@ actor MihomoAPIClient {
     func reloadConfig(path: String, force: Bool = true) async throws {
         let query = force ? [URLQueryItem(name: "force", value: "true")] : []
         try await sendVoid("/configs", method: "PUT", query: query, body: ReloadConfigBody(path: path))
+    }
+
+    func proxies() async throws -> MihomoProxiesSnapshot {
+        try await sendDecoding("/proxies", method: "GET")
+    }
+
+    /// Switch the upstream choice of a Selector group.
+    func selectProxy(group: String, name: String) async throws {
+        try await sendVoid("/proxies/\(escape(group))",
+                           method: "PUT",
+                           body: SelectProxyBody(name: name))
+    }
+
+    /// Probe a single proxy's latency. Returns nil for "timeout / unreachable"
+    /// (mihomo answers HTTP 200 with `{"message": "..."}` and no delay).
+    func proxyDelay(name: String,
+                    testURL: String = "https://www.gstatic.com/generate_204",
+                    timeoutMS: Int = 2500) async throws -> Int? {
+        let resp: MihomoDelayResponse = try await sendDecoding(
+            "/proxies/\(escape(name))/delay",
+            method: "GET",
+            query: [
+                URLQueryItem(name: "url", value: testURL),
+                URLQueryItem(name: "timeout", value: String(timeoutMS)),
+            ])
+        if let d = resp.delay, d > 0 { return d }
+        return nil
+    }
+
+    /// Test latency of every node in a group in a single call. Returns
+    /// `[node-name: ms]`; nodes that timed out are omitted.
+    func groupDelay(group: String,
+                    testURL: String = "https://www.gstatic.com/generate_204",
+                    timeoutMS: Int = 2500) async throws -> [String: Int] {
+        let req = makeRequest(
+            path: "/group/\(escape(group))/delay",
+            method: "GET",
+            query: [
+                URLQueryItem(name: "url", value: testURL),
+                URLQueryItem(name: "timeout", value: String(timeoutMS)),
+            ])
+        let data = try await send(req)
+        do {
+            return try decoder.decode([String: Int].self, from: data)
+        } catch {
+            throw MihomoAPIError.decoding(error)
+        }
+    }
+
+    private nonisolated func escape(_ s: String) -> String {
+        s.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? s
     }
 
     // MARK: - request helpers

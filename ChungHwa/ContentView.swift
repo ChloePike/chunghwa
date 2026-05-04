@@ -31,4 +31,5 @@ struct ContentView: View {
         .environment(logStore)
         .environment(profileStore)
         .environment(SystemProxyController())
+        .environment(ProxyStore())
 }

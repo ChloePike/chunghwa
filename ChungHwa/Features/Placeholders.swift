@@ -20,10 +20,6 @@ private struct ComingSoon: View {
     }
 }
 
-struct ProxiesView: View {
-    var body: some View { ComingSoon(title: "Proxies", symbol: "globe") }
-}
-
 struct RulesView: View {
     var body: some View { ComingSoon(title: "Rules", symbol: "list.bullet.rectangle") }
 }
