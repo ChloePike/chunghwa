@@ -559,31 +559,27 @@ struct MenubarIconName {
 
 // MARK: - Menubar status bar label (icon + ↑↓ speeds)
 
-/// macOS 菜单栏右上角的状态项：盾形图标 + 实时上下行速率（紧凑两行）。
-/// 内容随 TrafficStore.current 每秒更新；kernel 没跑时只显图标省空间。
+/// macOS 菜单栏状态项：盾形图标 + 实时上下行速率，单行横排。
+/// 字号走 NSFont menuBarFont 体感（11pt）确保看得清；内核没跑时只显图标。
 struct MenubarLabel: View {
     @Environment(KernelController.self) private var kernel
     @Environment(SystemProxyController.self) private var systemProxy
     @Environment(TrafficStore.self) private var traffic
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             Image(systemName: MenubarIconName.current(
                 kernel: kernel,
                 systemProxy: systemProxy))
             if kernel.apiClient != nil {
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text("↑ \(short(traffic.current?.upBps ?? 0))")
-                    Text("↓ \(short(traffic.current?.downBps ?? 0))")
-                }
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .lineSpacing(-1)
-                .monospacedDigit()
+                Text("↑\(short(traffic.current?.upBps ?? 0)) ↓\(short(traffic.current?.downBps ?? 0))")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
             }
         }
     }
 
-    /// 紧凑速率：菜单栏空间小，三位以内 + 单位。0 → "0"，<1 KB/s → "B"。
+    /// 紧凑速率：菜单栏空间有限，三位以内 + 单位。0 → "0"，<1 KB/s → "B"。
     private func short(_ bps: Int) -> String {
         switch bps {
         case 0:               return "0"
