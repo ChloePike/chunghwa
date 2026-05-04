@@ -2,13 +2,17 @@ import SwiftUI
 
 @Observable
 @MainActor
-final class BannerErrorBus {
-    private(set) var current: (source: String, message: String, posted: Date)?
+final class BannerBus {
+    enum Level { case info, error }
+    private(set) var current: (level: Level, source: String, message: String, posted: Date)?
 
-    func post(source: String, message: String?) {
+    func post(level: Level, source: String, message: String?) {
         guard let message, !message.isEmpty else { return }
-        current = (source: source, message: message, posted: Date())
+        current = (level: level, source: source, message: message, posted: Date())
     }
+
+    func error(source: String, message: String?) { post(level: .error, source: source, message: message) }
+    func info(source: String, message: String?)  { post(level: .info,  source: source, message: message) }
 
     func dismiss() {
         current = nil
@@ -17,7 +21,7 @@ final class BannerErrorBus {
 
 struct ContentView: View {
     @AppStorage("ChungHwa.LastSidebarTab") private var selectionRaw: String = SidebarTab.overview.rawValue
-    @State private var errorBus = BannerErrorBus()
+    @State private var errorBus = BannerBus()
 
     @Environment(ConfigStore.self) private var configStore
     @Environment(ProxyStore.self) private var proxyStore
@@ -26,6 +30,7 @@ struct ContentView: View {
     @Environment(ProfileStore.self) private var profileStore
     @Environment(KernelController.self) private var kernelController
     @Environment(LogStore.self) private var logStore
+    @Environment(SystemProxyController.self) private var systemProxy
 
     @AppStorage("ChungHwa.OnboardingDismissed") private var onboardingDismissed: Bool = false
 
@@ -48,7 +53,7 @@ struct ContentView: View {
         } detail: {
             VStack(spacing: 0) {
                 AppToolbar(title: title, onSwitchToProfiles: { selectionRaw = SidebarTab.profiles.rawValue })
-                ErrorBanner(bus: errorBus)
+                Banner(bus: errorBus)
                 if showOnboarding {
                     OnboardingBanner(
                         onCreate: { selectionRaw = SidebarTab.profiles.rawValue },
@@ -65,16 +70,27 @@ struct ContentView: View {
         .focusedSceneValue(\.kernelController, kernelController)
         .focusedSceneValue(\.logStore, logStore)
         .onChange(of: configStore.lastError) { _, m in
-            errorBus.post(source: "Config", message: m)
+            errorBus.error(source: "Config", message: m)
             notifications.post(source: "Config", level: .error, message: m)
         }
         .onChange(of: proxyStore.lastError) { _, m in
-            errorBus.post(source: "Proxy", message: m)
+            errorBus.error(source: "Proxy", message: m)
             notifications.post(source: "Proxy", level: .error, message: m)
         }
         .onChange(of: ruleStore.lastError) { _, m in
-            errorBus.post(source: "Rule", message: m)
+            errorBus.error(source: "Rule", message: m)
             notifications.post(source: "Rule", level: .error, message: m)
+        }
+        .onChange(of: configStore.mode) { old, new in
+            guard let old, let new, old != new else { return }
+            let msg = "Mode → \(new.displayName)"
+            errorBus.info(source: "Config", message: msg)
+            notifications.post(source: "Config", level: .info, message: msg)
+        }
+        .onChange(of: systemProxy.enabled) { _, new in
+            let msg = new ? "System proxy on" : "System proxy off"
+            errorBus.info(source: "System Proxy", message: msg)
+            notifications.post(source: "System Proxy", level: .info, message: msg)
         }
     }
 
@@ -101,15 +117,36 @@ struct ContentView: View {
     }
 }
 
-private struct ErrorBanner: View {
-    let bus: BannerErrorBus
+private struct Banner: View {
+    let bus: BannerBus
+
+    private func accent(_ level: BannerBus.Level) -> Color {
+        switch level {
+        case .info:  return ChungHwa.Palette.brass
+        case .error: return ChungHwa.Palette.earth
+        }
+    }
+
+    private func backgroundOpacity(_ level: BannerBus.Level) -> Double {
+        switch level {
+        case .info:  return 0.12
+        case .error: return 0.10
+        }
+    }
+
+    private func timeoutNanos(_ level: BannerBus.Level) -> UInt64 {
+        switch level {
+        case .info:  return 4_000_000_000
+        case .error: return 8_000_000_000
+        }
+    }
 
     var body: some View {
         Group {
             if let entry = bus.current {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(ChungHwa.Palette.earth)
+                        .fill(accent(entry.level))
                         .frame(width: 6, height: 6)
                     HStack(spacing: 6) {
                         Text("[\(entry.source)]")
@@ -136,16 +173,16 @@ private struct ErrorBanner: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                .background(ChungHwa.Palette.earth.opacity(0.10))
+                .background(accent(entry.level).opacity(backgroundOpacity(entry.level)))
                 .overlay(alignment: .bottom) {
                     Rectangle()
-                        .fill(ChungHwa.Palette.earth.opacity(0.4))
+                        .fill(accent(entry.level).opacity(0.4))
                         .frame(height: 0.5)
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .task(id: entry.posted) {
                     let posted = entry.posted
-                    try? await Task.sleep(nanoseconds: 8_000_000_000)
+                    try? await Task.sleep(nanoseconds: timeoutNanos(entry.level))
                     if bus.current?.posted == posted {
                         bus.dismiss()
                     }
