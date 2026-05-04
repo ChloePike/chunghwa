@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// Bone & Brass on Patina reskin of the Connections screen.
@@ -6,6 +7,12 @@ import SwiftUI
 /// `ChCard` with a fixed grid header and a scrolling list of rows. The toolbar
 /// above the card carries a "{active} · {total}" counter on the left and
 /// pause/clear icon buttons on the right.
+///
+/// Selecting a row reveals a 40%-wide details inspector to the right of the
+/// list. The inspector lets the user inspect routing chain, source/destination
+/// metadata and live stats, and close the connection. Selection persists even
+/// if the underlying connection ends — we surface a "Connection ended" badge
+/// and let the user dismiss the panel manually.
 struct ConnectionsView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(ConnectionsStore.self) private var store
@@ -16,16 +23,41 @@ struct ConnectionsView: View {
     /// resume so live updates flow through again.
     @State private var frozen: [MihomoConnection]? = nil
 
+    /// Currently selected row's id. When non-nil the inspector pane is shown.
+    @State private var selectedID: MihomoConnection.ID? = nil
+    /// Sticky last-known snapshot of the selected connection so the inspector
+    /// can keep showing details after the kernel drops it from `connections`.
+    @State private var lastSelectedSnapshot: MihomoConnection? = nil
+
     var body: some View {
         VStack(spacing: 10) {
             toolbar
-            card
+            cardArea
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(ChungHwa.Palette.bg)
         .navigationTitle("Connections")
+        .onChange(of: liveSelectedKey) { _, _ in
+            // Capture the latest live copy of the selected row so the
+            // inspector keeps showing up-to-date stats AND has something to
+            // fall back to if the kernel later drops the connection.
+            if let id = selectedID,
+               let live = store.connections.first(where: { $0.id == id }) {
+                lastSelectedSnapshot = live
+            }
+        }
+    }
+
+    /// String fingerprint used as `onChange` trigger so we don't require
+    /// `MihomoConnection: Equatable`. Encodes id, byte counters and chain so
+    /// any meaningful change re-snapshots `lastSelectedSnapshot`.
+    private var liveSelectedKey: String {
+        guard let id = selectedID,
+              let live = store.connections.first(where: { $0.id == id })
+        else { return "" }
+        return "\(live.id)|\(live.upload)|\(live.download)|\(live.chains.joined(separator: ">"))"
     }
 
     // MARK: - Data
@@ -39,6 +71,21 @@ struct ConnectionsView: View {
     /// We don't currently track per-connection liveness from the kernel, so
     /// every row is treated as "live" (pulsing green dot) per the spec.
     private var activeCount: Int { rows.count }
+
+    /// Connection driving the inspector. Falls back to the last seen snapshot
+    /// when the kernel has dropped the connection so the panel remains stable.
+    private var selectedConnection: MihomoConnection? {
+        guard let id = selectedID else { return nil }
+        if let live = store.connections.first(where: { $0.id == id }) {
+            return live
+        }
+        return lastSelectedSnapshot
+    }
+
+    private var selectedIsEnded: Bool {
+        guard let id = selectedID else { return false }
+        return !store.connections.contains(where: { $0.id == id })
+    }
 
     // MARK: - Toolbar
 
@@ -74,7 +121,46 @@ struct ConnectionsView: View {
         }
     }
 
-    // MARK: - Card / table
+    // MARK: - Card / table + inspector split
+
+    @ViewBuilder
+    private var cardArea: some View {
+        // 60 / 40 horizontal split when a row is selected. We use a
+        // GeometryReader because SwiftUI's flexible layout otherwise tends
+        // toward 50/50 once both children have `maxWidth: .infinity`.
+        GeometryReader { geo in
+            let gap: CGFloat = 10
+            let showInspector = selectedID != nil && selectedConnection != nil
+            let inspectorW = showInspector
+                ? max(0, (geo.size.width - gap) * 0.40)
+                : 0
+            let cardW = showInspector
+                ? max(0, geo.size.width - inspectorW - gap)
+                : geo.size.width
+
+            HStack(spacing: gap) {
+                card
+                    .frame(width: cardW)
+
+                if showInspector, let conn = selectedConnection {
+                    ConnectionInspector(
+                        connection: conn,
+                        ended: selectedIsEnded,
+                        anon: anon.enabled,
+                        closeConnection: {
+                            let id = conn.id
+                            Task { await store.close(id: id, api: kernel.apiClient) }
+                            clearSelection()
+                        },
+                        dismiss: { clearSelection() }
+                    )
+                    .frame(width: inspectorW)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+    }
 
     @ViewBuilder
     private var card: some View {
@@ -96,6 +182,7 @@ struct ConnectionsView: View {
                 }
             }
         }
+        .frame(maxHeight: .infinity)
     }
 
     private var headerRow: some View {
@@ -132,10 +219,19 @@ struct ConnectionsView: View {
                     ConnectionRowView(row: row, anon: anon.enabled)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
+                        .background(
+                            row.id == selectedID
+                            ? ChungHwa.Palette.brass.opacity(0.10)
+                            : Color.clear
+                        )
                         .overlay(alignment: .top) {
                             Rectangle()
                                 .fill(ChungHwa.Palette.lineSoft)
                                 .frame(height: 0.5)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            select(row)
                         }
                         .contextMenu {
                             Button("Close", role: .destructive) {
@@ -144,6 +240,22 @@ struct ConnectionsView: View {
                         }
                 }
             }
+        }
+    }
+
+    // MARK: - Selection helpers
+
+    private func select(_ row: MihomoConnection) {
+        withAnimation(.snappy(duration: 0.18)) {
+            selectedID = row.id
+            lastSelectedSnapshot = row
+        }
+    }
+
+    private func clearSelection() {
+        withAnimation(.snappy(duration: 0.18)) {
+            selectedID = nil
+            lastSelectedSnapshot = nil
         }
     }
 
@@ -293,4 +405,291 @@ private struct ConnectionsGridRow<Dot: View, Host: View, Process: View,
     /// Single-line row height. 11.5pt body + comfortable line-height matches
     /// the design's `padding: 7px 14px` plus text size.
     private var rowHeight: CGFloat { 18 }
+}
+
+// MARK: - Inspector
+
+/// Right-hand details panel shown when the user selects a row. Renders the
+/// destination, process, routing chain, rule, live stats and provides actions
+/// to close the connection or dismiss the panel.
+private struct ConnectionInspector: View {
+    let connection: MihomoConnection
+    let ended: Bool
+    let anon: Bool
+    let closeConnection: () -> Void
+    let dismiss: () -> Void
+
+    /// 1Hz tick that drives the elapsed-time counter without re-rendering on
+    /// the global store cadence.
+    @State private var now: Date = .init()
+    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        ChCardWithHeader(
+            connection.destination,
+            systemImage: "info.circle",
+            iconColor: ChungHwa.Palette.brass,
+            right: {
+                HStack(spacing: 6) {
+                    if ended {
+                        Text("Connection ended")
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.3)
+                            .textCase(.uppercase)
+                            .foregroundStyle(ChungHwa.Palette.dim)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .fill(ChungHwa.Palette.fill)
+                                    .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+                            )
+                    }
+                    Button(action: dismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(ChungHwa.Palette.dim)
+                            .frame(width: 22, height: 22)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(ChungHwa.Palette.fill)
+                                    .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close panel")
+                }
+            }
+        ) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    destinationBlock
+                    divider
+                    processBlock
+                    divider
+                    routingBlock
+                    divider
+                    ruleBlock
+                    divider
+                    statsBlock
+                    divider
+                    actionsBlock
+                }
+                .padding(.top, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .onReceive(tick) { now = $0 }
+    }
+
+    // MARK: blocks
+
+    private var destinationBlock: some View {
+        block(title: "Destination") {
+            row("Host",    valueText(connection.metadata.host ?? "—"), masked: true)
+            row("IP",      valueText(connection.metadata.destinationIP ?? "—"), masked: true)
+            row("Port",    valueText(connection.metadata.destinationPort ?? "—"))
+            row("Network", valueText(connection.metadata.network?.uppercased() ?? "—"))
+            row("Type",    valueText(connection.metadata.type ?? "—"))
+        }
+    }
+
+    private var processBlock: some View {
+        block(title: "Process") {
+            row("Name",
+                valueText(connection.metadata.process ?? "—"),
+                masked: true)
+            row("Path",
+                valueText(truncateMiddle(connection.metadata.processPath ?? "—",
+                                         max: 56))
+                    .help(connection.metadata.processPath ?? ""),
+                masked: true)
+            row("Source",
+                valueText(formattedSource),
+                masked: true)
+        }
+    }
+
+    private var routingBlock: some View {
+        block(title: "Routing") {
+            // `chains` is ordered from upstream-most to root group; the design
+            // shows the active proxy at the top, so we walk it reversed.
+            let path = connection.chains.reversed().map { String($0) }
+            VStack(alignment: .leading, spacing: 4) {
+                if path.isEmpty {
+                    Text("DIRECT")
+                        .font(ChungHwa.Typography.mono(11))
+                        .foregroundStyle(ChungHwa.Palette.text)
+                } else {
+                    ForEach(Array(path.enumerated()), id: \.offset) { idx, name in
+                        HStack(spacing: 6) {
+                            Text(name)
+                                .font(ChungHwa.Typography.mono(11,
+                                    weight: idx == 0 ? .semibold : .regular))
+                                .foregroundStyle(idx == 0
+                                    ? ChungHwa.Palette.text
+                                    : ChungHwa.Palette.dim)
+                            Spacer(minLength: 0)
+                        }
+                        if idx < path.count - 1 {
+                            Text("↓")
+                                .font(ChungHwa.Typography.mono(10))
+                                .foregroundStyle(ChungHwa.Palette.faint)
+                                .padding(.leading, 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var ruleBlock: some View {
+        block(title: "Rule") {
+            row("Rule", valueText(connection.rule))
+            if let payload = connection.rulePayload, !payload.isEmpty {
+                row("Payload", valueText(payload))
+            }
+        }
+    }
+
+    private var statsBlock: some View {
+        block(title: "Stats") {
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Upload")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(ChungHwa.Palette.dim)
+                    Text("↑ \(ChFormat.bytes(connection.upload))")
+                        .font(ChungHwa.Typography.mono(11))
+                        .foregroundStyle(ChungHwa.Palette.text)
+                        .monospacedDigit()
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Download")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(ChungHwa.Palette.dim)
+                    Text("↓ \(ChFormat.bytes(connection.download))")
+                        .font(ChungHwa.Typography.mono(11))
+                        .foregroundStyle(ChungHwa.Palette.text)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 0)
+            }
+            row("Elapsed", valueText(elapsedString))
+        }
+    }
+
+    private var actionsBlock: some View {
+        HStack(spacing: 8) {
+            Button(action: closeConnection) {
+                HStack(spacing: 6) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                    Text("Close connection")
+                        .font(.system(size: 11.5, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(ended ? ChungHwa.Palette.brassDark.opacity(0.55)
+                                    : ChungHwa.Palette.brass)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(ended)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: helpers
+
+    private var divider: some View {
+        Rectangle()
+            .fill(ChungHwa.Palette.lineSoft)
+            .frame(height: 0.5)
+    }
+
+    @ViewBuilder
+    private func block<Content: View>(title: String,
+                                      @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.4)
+                .textCase(.uppercase)
+                .foregroundStyle(ChungHwa.Palette.faint)
+            content()
+        }
+    }
+
+    /// Label / value row used inside blocks. `masked` plumbs the screen-level
+    /// anonymous-mode flag down so the same identifying fields the table
+    /// blurs are blurred here too.
+    private func row(_ label: String,
+                     _ value: some View,
+                     masked: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label)
+                .font(.system(size: 10.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .frame(width: 64, alignment: .leading)
+            Group {
+                if masked {
+                    AnyView(value.anonMask(anon))
+                } else {
+                    AnyView(value)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func valueText(_ s: String) -> some View {
+        Text(s)
+            .font(ChungHwa.Typography.mono(11))
+            .foregroundStyle(ChungHwa.Palette.text)
+            .lineLimit(2)
+            .truncationMode(.middle)
+            .textSelection(.enabled)
+    }
+
+    private var formattedSource: String {
+        let ip   = connection.metadata.sourceIP ?? "—"
+        let port = connection.metadata.sourcePort ?? ""
+        return port.isEmpty ? ip : "\(ip):\(port)"
+    }
+
+    /// Truncate `s` in the middle so both ends remain visible when the path
+    /// is too long for one line. Used for `processPath`.
+    private func truncateMiddle(_ s: String, max: Int) -> String {
+        guard s.count > max, max > 3 else { return s }
+        let keep = (max - 1) / 2
+        let head = s.prefix(keep)
+        let tail = s.suffix(max - keep - 1)
+        return "\(head)…\(tail)"
+    }
+
+    /// `start` is an ISO-8601 timestamp from mihomo. Falls back to "—" if it
+    /// fails to parse.
+    private var elapsedString: String {
+        guard let started = parseISO(connection.start) else { return "—" }
+        let s = Int(now.timeIntervalSince(started))
+        guard s >= 0 else { return "0s" }
+        let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
+        if h > 0 { return String(format: "%dh %02dm %02ds", h, m, sec) }
+        if m > 0 { return String(format: "%dm %02ds", m, sec) }
+        return "\(sec)s"
+    }
+
+    private func parseISO(_ s: String) -> Date? {
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: s) { return d }
+        let f2 = ISO8601DateFormatter()
+        f2.formatOptions = [.withInternetDateTime]
+        return f2.date(from: s)
+    }
 }
