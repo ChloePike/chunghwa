@@ -22,6 +22,7 @@ struct ContentView: View {
     @Environment(ConfigStore.self) private var configStore
     @Environment(ProxyStore.self) private var proxyStore
     @Environment(RuleStore.self) private var ruleStore
+    @Environment(NotificationCenterStore.self) private var notifications
 
     var body: some View {
         NavigationSplitView {
@@ -38,12 +39,15 @@ struct ContentView: View {
         .focusedSceneValue(\.sidebarSelection, $selection)
         .onChange(of: configStore.lastError) { _, m in
             errorBus.post(source: "Config", message: m)
+            notifications.post(source: "Config", level: .error, message: m)
         }
         .onChange(of: proxyStore.lastError) { _, m in
             errorBus.post(source: "Proxy", message: m)
+            notifications.post(source: "Proxy", level: .error, message: m)
         }
         .onChange(of: ruleStore.lastError) { _, m in
             errorBus.post(source: "Rule", message: m)
+            notifications.post(source: "Rule", level: .error, message: m)
         }
     }
 
@@ -155,4 +159,5 @@ private struct ErrorBanner: View {
         .environment(configStore)
         .environment(ruleStore)
         .environment(AnonymousMode())
+        .environment(NotificationCenterStore())
 }

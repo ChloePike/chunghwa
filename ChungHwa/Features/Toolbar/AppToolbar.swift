@@ -19,6 +19,9 @@ struct AppToolbar: View {
     @Environment(SystemProxyController.self) private var systemProxy
     @Environment(ProfileStore.self) private var profileStore
     @Environment(AnonymousMode.self) private var anon
+    @Environment(NotificationCenterStore.self) private var notifications
+
+    @State private var notificationsOpen = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -29,6 +32,8 @@ struct AppToolbar: View {
 
             Spacer()
 
+            reloadButton
+            bellButton
             profilePill
             modeSegmented
             chipCluster
@@ -40,6 +45,37 @@ struct AppToolbar: View {
             Rectangle()
                 .fill(ChungHwa.Palette.line)
                 .frame(height: 0.5)
+        }
+    }
+
+    // MARK: - reload + bell
+
+    private var reloadButton: some View {
+        let kernelReady = kernel.apiClient != nil
+        return IconButton(
+            symbol: "arrow.clockwise",
+            help: "Reload mihomo config (preserves connections)",
+            disabled: !kernelReady
+        ) {
+            Task { await kernel.reload() }
+        }
+    }
+
+    private var bellButton: some View {
+        let unread = notifications.unreadCount
+        let symbol = unread > 0 ? "bell.badge" : "bell"
+        return IconButton(
+            symbol: symbol,
+            help: unread > 0
+                ? "Notifications · \(unread) new"
+                : "Notifications",
+            tint: unread > 0 ? ChungHwa.Palette.brass : nil
+        ) {
+            notificationsOpen.toggle()
+        }
+        .popover(isPresented: $notificationsOpen, arrowEdge: .top) {
+            NotificationsPopover(store: notifications)
+                .onAppear { notifications.markAllRead() }
         }
     }
 
@@ -205,5 +241,161 @@ private struct ToggleChip: View {
         .opacity(disabled ? 0.5 : 1)
         .disabled(disabled)
         .help(help)
+    }
+}
+
+// MARK: - icon button (reload / bell)
+
+/// Borderless 28pt icon button used by the reload + bell toolbar slots.
+/// Matches the visual weight of the chips' off-state (no fill, soft border on
+/// hover) without the chip badge.
+private struct IconButton: View {
+    let symbol: String
+    let help: String
+    var disabled: Bool = false
+    var tint: Color? = nil
+    let action: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(tint ?? ChungHwa.Palette.dim)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(hovered && !disabled
+                              ? ChungHwa.Palette.fill
+                              : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(hovered && !disabled
+                                      ? ChungHwa.Palette.line
+                                      : Color.clear,
+                                      lineWidth: 0.5)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .opacity(disabled ? 0.4 : 1)
+        .disabled(disabled)
+        .onHover { hovered = $0 }
+        .help(help)
+    }
+}
+
+// MARK: - notifications popover
+
+private struct NotificationsPopover: View {
+    let store: NotificationCenterStore
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            content
+        }
+        .frame(width: 320)
+        .frame(maxHeight: 360)
+        .background(ChungHwa.Palette.card)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text("Notifications")
+                .font(ChungHwa.Typography.serif(14, weight: .medium))
+                .foregroundStyle(ChungHwa.Palette.text)
+            Spacer(minLength: 6)
+            Button("Mark all read") { store.markAllRead() }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .disabled(store.entries.isEmpty)
+            Button("Clear") { store.clear() }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .disabled(store.entries.isEmpty)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if store.entries.isEmpty {
+            VStack {
+                Spacer()
+                Text("No notifications")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 120)
+        } else {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(store.entries.prefix(10))) { entry in
+                        Row(entry: entry, formatter: Self.relativeFormatter)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        if entry.id != store.entries.prefix(10).last?.id {
+                            Divider().opacity(0.4)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private struct Row: View {
+        let entry: NotificationCenterStore.Entry
+        let formatter: RelativeDateTimeFormatter
+
+        private var dotColor: Color {
+            switch entry.level {
+            case .info:    return ChungHwa.Palette.patina
+            case .warning: return ChungHwa.Palette.brass
+            case .error:   return ChungHwa.Palette.earth
+            }
+        }
+
+        var body: some View {
+            HStack(alignment: .top, spacing: 8) {
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: 7, height: 7)
+                    .padding(.top, 5)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("[\(entry.source)]")
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundStyle(ChungHwa.Palette.dim)
+                        Spacer(minLength: 4)
+                        Text(formatter.localizedString(for: entry.posted, relativeTo: Date()))
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(ChungHwa.Palette.faint)
+                            .monospacedDigit()
+                    }
+                    Text(entry.message)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(ChungHwa.Palette.text)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
     }
 }

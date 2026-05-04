@@ -22,6 +22,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.ruleStore)
                 .environment(appDelegate.anonymousMode)
                 .environment(appDelegate.loginItem)
+                .environment(appDelegate.notificationCenterStore)
         }
         .commands {
             ChungHwaCommands()
@@ -60,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let anonymousMode: AnonymousMode
     let kernel: KernelController
     let loginItem: LoginItemController
+    let notificationCenterStore: NotificationCenterStore
 
     override init() {
         let resolver = KernelBinaryResolver()
@@ -95,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             configStore: configStore
         )
         self.loginItem = LoginItemController()
+        self.notificationCenterStore = NotificationCenterStore()
         super.init()
     }
 
