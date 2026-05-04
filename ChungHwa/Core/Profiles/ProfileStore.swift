@@ -168,6 +168,15 @@ final class ProfileStore {
         return profile
     }
 
+    func setYaml(_ content: String, for id: UUID) throws {
+        let data = Data(content.utf8)
+        try writeYaml(data, for: id)
+        if let idx = profiles.firstIndex(where: { $0.id == id }) {
+            profiles[idx].updatedAt = Date()
+            try save()
+        }
+    }
+
     func refresh(_ id: UUID) async throws {
         guard let idx = profiles.firstIndex(where: { $0.id == id }),
               case let .url(url) = profiles[idx].source else {

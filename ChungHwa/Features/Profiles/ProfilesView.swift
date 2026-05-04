@@ -808,7 +808,18 @@ private struct YAMLInspectorSheet: View {
     let yamlURL: URL
     let onClose: () -> Void
 
+    @Environment(ProfileStore.self) private var store
+    @Environment(KernelController.self) private var kernel
+
     @State private var copyHint: String?
+    @State private var isEditing: Bool = false
+    @State private var editedContent: String = ""
+    /// Read-mode display content. Initialized from `yaml`; refreshed after a
+    /// successful save so the highlighted view shows the new bytes without
+    /// having to close & reopen the sheet.
+    @State private var displayContent: String?
+    /// Brief "Saved." / "Reloading mihomo…" status message shown after a save.
+    @State private var saveStatus: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -822,6 +833,10 @@ private struct YAMLInspectorSheet: View {
         }
         .frame(minWidth: 720, idealWidth: 720, minHeight: 600, idealHeight: 600)
         .background(ChungHwa.Palette.card)
+        .onAppear {
+            displayContent = yaml
+            editedContent = yaml ?? ""
+        }
     }
 
     // MARK: title
@@ -870,6 +885,12 @@ private struct YAMLInspectorSheet: View {
                     Capsule().strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
                 )
             Spacer(minLength: 0)
+            if let saveStatus {
+                Text(saveStatus)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.brass)
+                    .transition(.opacity)
+            }
             if let copyHint {
                 Text(copyHint)
                     .font(.system(size: 11))
@@ -895,9 +916,23 @@ private struct YAMLInspectorSheet: View {
 
     @ViewBuilder
     private var bodyArea: some View {
-        if let yaml {
+        if isEditing {
+            // TextEditor doesn't support AttributedString styling, so we lose
+            // syntax highlighting in edit mode; we keep the same mono font and
+            // soft card background so the visual change is minimal.
+            TextEditor(text: $editedContent)
+                .font(ChungHwa.Typography.mono(11))
+                .foregroundStyle(ChungHwa.Palette.text)
+                .scrollContentBackground(.hidden)
+                .background(ChungHwa.Palette.cardSoft)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
+                )
+                .padding(.horizontal, 18)
+        } else if let displayContent {
             ScrollView([.vertical, .horizontal]) {
-                Text(YAMLHighlighter.highlight(yaml))
+                Text(YAMLHighlighter.highlight(displayContent))
                     .textSelection(.enabled)
                     .font(ChungHwa.Typography.mono(11))
                     .lineSpacing(2)
@@ -929,17 +964,23 @@ private struct YAMLInspectorSheet: View {
 
     // MARK: footer
 
+    /// In edit mode the footer counts the live buffer; in read mode it counts
+    /// the on-disk content shown above (which we update after a successful save).
+    private var footerSource: String? {
+        isEditing ? editedContent : displayContent
+    }
+
     private var footerLine: some View {
         HStack(spacing: 10) {
-            if let yaml {
-                Text("\(yaml.utf8.count) bytes")
+            if let s = footerSource {
+                Text("\(s.utf8.count) bytes")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .monospacedDigit()
                 Text("·")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.faint)
-                Text("\(lineCount(yaml)) lines")
+                Text("\(lineCount(s)) lines")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .monospacedDigit()
@@ -966,69 +1007,143 @@ private struct YAMLInspectorSheet: View {
 
     // MARK: bottom buttons
 
+    @ViewBuilder
     private var bottomButtons: some View {
+        if isEditing {
+            editModeButtons
+        } else {
+            readModeButtons
+        }
+    }
+
+    private var readModeButtons: some View {
         HStack(spacing: 8) {
+            // Edit (brass) — left aligned to set it apart from the right-side
+            // utility cluster.
+            sheetBrassButton(title: "Edit", systemImage: "pencil") {
+                editedContent = displayContent ?? ""
+                saveStatus = nil
+                isEditing = true
+            }
             Spacer(minLength: 0)
             if case .file = profile.source {
-                Button {
+                sheetGhostButton(title: "Reveal in Finder", systemImage: "folder") {
                     NSWorkspace.shared.activateFileViewerSelecting([yamlURL])
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 10.5, weight: .medium))
-                        Text("Reveal in Finder")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundStyle(ChungHwa.Palette.text)
-                    .padding(.horizontal, 11)
-                    .frame(height: 26)
-                    .background(
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(ChungHwa.Palette.pillBg)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7)
-                            .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
-                    )
                 }
-                .buttonStyle(.plain)
             }
-            Button {
-                guard let yaml else { return }
+            sheetGhostButton(title: "Copy to clipboard", systemImage: "doc.on.doc") {
+                guard let s = displayContent else { return }
                 let pb = NSPasteboard.general
                 pb.clearContents()
-                pb.setString(yaml, forType: .string)
+                pb.setString(s, forType: .string)
                 withAnimation { copyHint = "Copied" }
                 Task {
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     withAnimation { copyHint = nil }
                 }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "doc.on.doc")
-                        .font(.system(size: 10.5, weight: .semibold))
-                    Text("Copy to clipboard")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundStyle(ChungHwa.Palette.ink)
-                .padding(.horizontal, 11)
-                .frame(height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(ChungHwa.Palette.brass)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(ChungHwa.Palette.brassDark.opacity(0.55), lineWidth: 0.5)
-                )
-                .shadow(color: ChungHwa.Palette.brassDark.opacity(0.20), radius: 1, y: 1)
             }
-            .buttonStyle(.plain)
-            .disabled(yaml == nil)
-            .opacity(yaml == nil ? 0.5 : 1)
+            sheetGhostButton(title: "Close", systemImage: "xmark", action: onClose)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
+    }
+
+    private var editModeButtons: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            sheetGhostButton(title: "Cancel", systemImage: "arrow.uturn.backward") {
+                editedContent = displayContent ?? ""
+                isEditing = false
+                saveStatus = nil
+            }
+            sheetBrassButton(title: "Save", systemImage: "checkmark") {
+                performSave()
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+    }
+
+    /// Save edits to disk, refresh the read-mode buffer, and — if this is the
+    /// active profile — trigger a mihomo reload. We don't validate the yaml
+    /// here; the kernel will surface parse errors via the global error banner.
+    private func performSave() {
+        let toSave = editedContent
+        do {
+            try store.setYaml(toSave, for: profile.id)
+        } catch {
+            // Surface the write error inline; leave the user in edit mode so
+            // they can copy out their changes if needed.
+            saveStatus = "Save failed: \(error)"
+            return
+        }
+        displayContent = toSave
+        isEditing = false
+
+        if profile.id == store.activeProfileID {
+            withAnimation { saveStatus = "Reloading mihomo…" }
+            Task {
+                await kernel.reload()
+                withAnimation { saveStatus = "Saved." }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                withAnimation { saveStatus = nil }
+            }
+        } else {
+            withAnimation { saveStatus = "Saved." }
+            Task {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                withAnimation { saveStatus = nil }
+            }
+        }
+    }
+
+    // MARK: - shared button shapes
+
+    private func sheetBrassButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10.5, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(ChungHwa.Palette.ink)
+            .padding(.horizontal, 11)
+            .frame(height: 26)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(ChungHwa.Palette.brass)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(ChungHwa.Palette.brassDark.opacity(0.55), lineWidth: 0.5)
+            )
+            .shadow(color: ChungHwa.Palette.brassDark.opacity(0.20), radius: 1, y: 1)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sheetGhostButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10.5, weight: .medium))
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(ChungHwa.Palette.text)
+            .padding(.horizontal, 11)
+            .frame(height: 26)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(ChungHwa.Palette.pillBg)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
