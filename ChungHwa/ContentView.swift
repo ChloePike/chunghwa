@@ -104,20 +104,20 @@ private struct BannerEventBridge: View {
         Color.clear
             .frame(width: 0, height: 0)
             .onChange(of: configStore.lastError) { _, m in
-                bus.error(source: "Config", message: m)
-                notifications.post(source: "Config", level: .error, message: m)
+                bus.error(source: "配置", message: m)
+                notifications.post(source: "配置", level: .error, message: m)
             }
             .onChange(of: proxyStore.lastError) { _, m in
-                bus.error(source: "Proxy", message: m)
-                notifications.post(source: "Proxy", level: .error, message: m)
+                bus.error(source: "代理", message: m)
+                notifications.post(source: "代理", level: .error, message: m)
             }
             .onChange(of: ruleStore.lastError) { _, m in
-                bus.error(source: "Rule", message: m)
-                notifications.post(source: "Rule", level: .error, message: m)
+                bus.error(source: "规则", message: m)
+                notifications.post(source: "规则", level: .error, message: m)
             }
             .onChange(of: profileStore.lastError) { _, m in
-                bus.error(source: "Profile", message: m)
-                notifications.post(source: "Profile", level: .error, message: m)
+                bus.error(source: "配置文件", message: m)
+                notifications.post(source: "配置文件", level: .error, message: m)
             }
     }
 }
@@ -230,16 +230,16 @@ private struct OnboardingBanner: View {
                 .font(.system(size: 16))
                 .foregroundStyle(ChungHwa.Palette.brass)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Welcome to ChungHwa")
+                Text("欢迎使用中華")
                     .font(ChungHwa.Typography.serif(14))
                     .foregroundStyle(ChungHwa.Palette.text)
-                Text("Add a YAML profile to get started.")
+                Text("添加 YAML 配置开始使用。")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.text)
             }
             Spacer(minLength: 8)
             Button(action: onCreate) {
-                Text("Create profile")
+                Text("创建配置")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(ChungHwa.Palette.bone)
                     .padding(.horizontal, 12)
@@ -251,7 +251,7 @@ private struct OnboardingBanner: View {
             }
             .buttonStyle(.plain)
             Button(action: onDismiss) {
-                Text("Dismiss")
+                Text("忽略")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .padding(.horizontal, 10)
@@ -342,10 +342,10 @@ private struct StatusBar: View {
 
     private var kernelLabel: String {
         switch kernel.status {
-        case .running:  return "running"
-        case .starting: return "starting…"
-        case .failed:   return "failed"
-        case .idle:     return "idle"
+        case .running:  return "运行中"
+        case .starting: return "启动中…"
+        case .failed:   return "失败"
+        case .idle:     return "空闲"
         }
     }
 
@@ -361,7 +361,7 @@ private struct StatusBar: View {
             Text("\(connectionsStore.connections.count)")
                 .font(ChungHwa.Typography.mono(10.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
-            Text("conns")
+            Text("连接")
                 .font(.system(size: 10.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
         }
@@ -399,7 +399,7 @@ private struct StatusBar: View {
 
     private var modeItem: some View {
         HStack(spacing: 4) {
-            Text("mode:")
+            Text("模式:")
                 .font(.system(size: 10.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
             Text(configStore.mode?.displayName ?? "—")
@@ -410,7 +410,7 @@ private struct StatusBar: View {
 
     private var systemProxyBadge: some View {
         let on = systemProxy.enabled
-        return Text(on ? "SP on" : "SP off")
+        return Text(on ? "系统代理 开" : "系统代理 关")
             .font(ChungHwa.Typography.mono(10, weight: .medium))
             .foregroundStyle(on ? ChungHwa.Palette.patina : ChungHwa.Palette.faint)
             .padding(.horizontal, 6)

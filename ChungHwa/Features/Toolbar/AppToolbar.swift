@@ -13,12 +13,18 @@ struct ChungHwaToolbar: ToolbarContent {
     var onSwitchToProfiles: (() -> Void)? = nil
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            ToolbarTitle(title: title)
-        }
+        // The window's native title (via .navigationTitle) carries the tab
+        // name; we don't add a custom serif title item here so the two
+        // don't visually stack.
+        ToolbarItem(placement: .primaryAction) { ToolbarReload() }
+        ToolbarItem(placement: .primaryAction) { ToolbarBell() }
         ToolbarItem(placement: .primaryAction) {
-            ToolbarTrailing(onSwitchToProfiles: onSwitchToProfiles)
+            ToolbarProfile(onSwitchToProfiles: onSwitchToProfiles)
         }
+        ToolbarItem(placement: .primaryAction) { ToolbarMode() }
+        ToolbarItem(placement: .primaryAction) { ToolbarSysProxy() }
+        ToolbarItem(placement: .primaryAction) { ToolbarTUN() }
+        ToolbarItem(placement: .primaryAction) { ToolbarAnonymous() }
     }
 }
 
@@ -35,105 +41,53 @@ private struct ToolbarTitle: View {
     }
 }
 
-// MARK: - trailing cluster
+// MARK: - individual toolbar items
 
-private struct ToolbarTrailing: View {
-    var onSwitchToProfiles: (() -> Void)? = nil
-
+private struct ToolbarReload: View {
     @Environment(KernelController.self) private var kernel
-    @Environment(ConfigStore.self) private var configStore
-    @Environment(SystemProxyController.self) private var systemProxy
-    @Environment(ProfileStore.self) private var profileStore
-    @Environment(AnonymousMode.self) private var anon
-    @Environment(NotificationCenterStore.self) private var notifications
-
-    @State private var notificationsOpen = false
-
     var body: some View {
-        HStack(spacing: 8) {
-            reloadButton
-            bellButton
-            profilePill
-            modeSegmented
-            chipCluster
-        }
-    }
-
-    // MARK: - reload + bell
-
-    private var reloadButton: some View {
-        let kernelReady = kernel.apiClient != nil
-        return IconButton(
-            symbol: "arrow.clockwise",
-            help: "重载 mihomo 配置（保留连接）",
-            disabled: !kernelReady
-        ) {
+        let ready = kernel.apiClient != nil
+        Button {
             Task { await kernel.reload() }
+        } label: {
+            Image(systemName: "arrow.clockwise")
         }
+        .disabled(!ready)
+        .help("重载 mihomo 配置（保留连接）")
     }
+}
 
-    private var bellButton: some View {
+private struct ToolbarBell: View {
+    @Environment(NotificationCenterStore.self) private var notifications
+    @State private var open = false
+    var body: some View {
         let unread = notifications.unreadCount
-        let symbol = unread > 0 ? "bell.badge" : "bell"
-        return IconButton(
-            symbol: symbol,
-            help: unread > 0
-                ? "通知 · \(unread) 条新"
-                : "通知",
-            tint: unread > 0 ? ChungHwa.Palette.brass : nil
-        ) {
-            notificationsOpen.toggle()
+        Button {
+            open.toggle()
+        } label: {
+            Image(systemName: unread > 0 ? "bell.badge" : "bell")
+                .foregroundStyle(unread > 0
+                                 ? AnyShapeStyle(ChungHwa.Palette.brass)
+                                 : AnyShapeStyle(.primary))
         }
-        .popover(isPresented: $notificationsOpen, arrowEdge: .top) {
+        .help(unread > 0 ? "通知 · \(unread) 条新" : "通知")
+        .popover(isPresented: $open, arrowEdge: .top) {
             NotificationsPopover(store: notifications)
                 .onAppear { notifications.markAllRead() }
         }
     }
+}
 
-    // MARK: - segments
+private struct ToolbarProfile: View {
+    var onSwitchToProfiles: (() -> Void)? = nil
 
-    private var modeSegmented: some View {
-        let active = configStore.mode
-        let kernelReady = kernel.apiClient != nil
-        return HStack(spacing: 0) {
-            ForEach(MihomoMode.allCases, id: \.self) { mode in
-                Button {
-                    Task { await configStore.setMode(mode, api: kernel.apiClient) }
-                } label: {
-                    Text(mode.displayName)
-                        .font(.system(size: 12, weight: active == mode ? .semibold : .medium))
-                        .foregroundStyle(active == mode
-                                         ? ChungHwa.Palette.text
-                                         : ChungHwa.Palette.dim)
-                        .padding(.horizontal, 12)
-                        .frame(height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(active == mode ? ChungHwa.Palette.pillBg : Color.clear)
-                                .shadow(color: active == mode ? .black.opacity(0.06) : .clear,
-                                        radius: 1, y: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(ChungHwa.Palette.fill)
-                .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
-        )
-        .opacity(kernelReady ? 1 : 0.5)
-        .disabled(!kernelReady)
-        .help(kernelReady
-              ? "出站模式（直连 / 规则 / 全局）"
-              : "切换模式需要内核运行中")
-    }
+    @Environment(KernelController.self) private var kernel
+    @Environment(ProfileStore.self) private var profileStore
 
-    private var profilePill: some View {
+    var body: some View {
         let name = profileStore.profiles.first(where: { $0.id == profileStore.activeProfileID })?.name
             ?? "无配置"
-        return Menu {
+        Menu {
             if profileStore.profiles.isEmpty {
                 Text("暂无配置")
             } else {
@@ -155,103 +109,81 @@ private struct ToolbarTrailing: View {
                 onSwitchToProfiles?()
             }
         } label: {
-            HStack(spacing: 6) {
-                Text(name)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(ChungHwa.Palette.text)
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(ChungHwa.Palette.dim)
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(ChungHwa.Palette.pillBg)
-                    .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
-            )
-            .overlay(RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            Label(name, systemImage: "doc.text")
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
         .help("当前配置 — 点击切换")
-    }
-
-    private var chipCluster: some View {
-        HStack(spacing: 6) {
-            ToggleChip(
-                isOn: systemProxy.enabled,
-                symbol: "network",
-                tint: ChungHwa.Palette.patina,
-                help: "系统代理 · \(systemProxy.enabled ? "已开" : "已关")",
-                action: { systemProxy.toggle() }
-            )
-            ToggleChip(
-                isOn: false,
-                symbol: "shield.lefthalf.filled",
-                tint: ChungHwa.Palette.brass,
-                help: "TUN 模式 · 已关（需要特权辅助，M5+）",
-                disabled: true,
-                action: {}
-            )
-            ToggleChip(
-                isOn: anon.enabled,
-                symbol: anon.enabled ? "eye.slash" : "eye",
-                tint: ChungHwa.Palette.ink,
-                help: "匿名模式 · \(anon.enabled ? "已开（信息已隐藏）" : "已关")",
-                action: { anon.enabled.toggle() }
-            )
-        }
     }
 }
 
-// MARK: - chip
-
-private struct ToggleChip: View {
-    let isOn: Bool
-    let symbol: String
-    let tint: Color
-    let help: String
-    var disabled: Bool = false
-    let action: () -> Void
+private struct ToolbarMode: View {
+    @Environment(KernelController.self) private var kernel
+    @Environment(ConfigStore.self) private var configStore
 
     var body: some View {
-        Button(action: action) {
-            ZStack(alignment: .bottomTrailing) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(isOn ? .white : ChungHwa.Palette.dim)
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Circle()
-                            .fill(isOn
-                                  ? AnyShapeStyle(LinearGradient(
-                                      colors: [tint, tint.opacity(0.85)],
-                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                                  : AnyShapeStyle(ChungHwa.Palette.fill))
-                    )
-                    .overlay(Circle().strokeBorder(
-                        isOn ? tint.opacity(0.4) : ChungHwa.Palette.line,
-                        lineWidth: 0.5))
-                    .shadow(color: isOn ? tint.opacity(0.25) : .clear, radius: 3, y: 1)
-
-                if isOn {
-                    Circle()
-                        .fill(ChungHwa.Palette.patina)
-                        .frame(width: 8, height: 8)
-                        .overlay(Circle().strokeBorder(ChungHwa.Palette.bg, lineWidth: 1.5))
-                        .offset(x: 1, y: 1)
-                }
+        let kernelReady = kernel.apiClient != nil
+        Picker("出站模式", selection: pickerBinding) {
+            ForEach(MihomoMode.allCases, id: \.self) { mode in
+                Text(mode.displayName).tag(Optional(mode))
             }
         }
-        .buttonStyle(.plain)
-        .opacity(disabled ? 0.5 : 1)
-        .disabled(disabled)
-        .help(help)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .disabled(!kernelReady)
+        .help(kernelReady
+              ? "出站模式（直连 / 规则 / 全局）"
+              : "切换模式需要内核运行中")
+    }
+
+    private var pickerBinding: Binding<MihomoMode?> {
+        Binding(
+            get: { configStore.mode },
+            set: { newMode in
+                guard let newMode, newMode != configStore.mode else { return }
+                Task { await configStore.setMode(newMode, api: kernel.apiClient) }
+            }
+        )
+    }
+}
+
+private struct ToolbarSysProxy: View {
+    @Environment(SystemProxyController.self) private var systemProxy
+    var body: some View {
+        Button {
+            systemProxy.toggle()
+        } label: {
+            Image(systemName: "network")
+                .foregroundStyle(systemProxy.enabled
+                                 ? AnyShapeStyle(ChungHwa.Palette.patina)
+                                 : AnyShapeStyle(.primary))
+        }
+        .help("系统代理 · \(systemProxy.enabled ? "已开" : "已关")")
+    }
+}
+
+private struct ToolbarTUN: View {
+    var body: some View {
+        Button {
+            // TUN 需要 PrivilegedHelper，M5+
+        } label: {
+            Image(systemName: "shield.lefthalf.filled")
+        }
+        .disabled(true)
+        .help("TUN 模式 · 已关（需要特权辅助，M5+）")
+    }
+}
+
+private struct ToolbarAnonymous: View {
+    @Environment(AnonymousMode.self) private var anon
+    var body: some View {
+        Button {
+            anon.enabled.toggle()
+        } label: {
+            Image(systemName: anon.enabled ? "eye.slash" : "eye")
+                .foregroundStyle(anon.enabled
+                                 ? AnyShapeStyle(ChungHwa.Palette.brass)
+                                 : AnyShapeStyle(.primary))
+        }
+        .help("匿名模式 · \(anon.enabled ? "已开（信息已隐藏）" : "已关")")
     }
 }
 
