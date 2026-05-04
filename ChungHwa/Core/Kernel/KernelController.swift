@@ -26,6 +26,10 @@ final class KernelController {
     private(set) var apiClient: MihomoAPIClient?
     private(set) var streamClient: MihomoStreamClient?
     private(set) var activeBinary: KernelBinary?
+    /// Timestamp when mihomo first reached `.running` for the current
+    /// session. `nil` while idle / starting / failed. Drives Overview's
+    /// uptime stat.
+    private(set) var startedAt: Date?
 
     private var process: Process?
     private var stdoutPipe: Pipe?
@@ -117,6 +121,7 @@ final class KernelController {
 
             let version = try await waitForReady(client: client, timeout: 8)
             status = .running(version: version)
+            startedAt = Date()
             log.info("mihomo ready version=\(version, privacy: .public)")
             await configStore.refresh(api: client)
             startStreams(stream)
@@ -226,6 +231,7 @@ final class KernelController {
         streamClient = nil
         activeBinary = nil
         runtimeSecret = nil
+        startedAt = nil
         for task in streamTasks { task.cancel() }
         streamTasks = []
         trafficStore.reset()
