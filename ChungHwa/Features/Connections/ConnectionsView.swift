@@ -234,13 +234,73 @@ struct ConnectionsView: View {
                             select(row)
                         }
                         .contextMenu {
-                            Button("Close", role: .destructive) {
-                                Task { await store.close(id: row.id, api: kernel.apiClient) }
-                            }
+                            rowContextMenu(for: [row.id])
                         }
                 }
             }
         }
+    }
+
+    // MARK: - Right-click menu
+
+    /// Shared context-menu content used both for individual rows (right-click
+    /// without selecting) and for table-wide selection-based right-clicks.
+    /// When `ids` covers multiple rows the copy actions concatenate values
+    /// with newlines, so the user gets a useful clipboard either way.
+    @ViewBuilder
+    private func rowContextMenu(for ids: [MihomoConnection.ID]) -> some View {
+        let conns = ids.compactMap { id in
+            rows.first(where: { $0.id == id })
+        }
+
+        Button("Copy host") {
+            let value = conns
+                .map { $0.metadata.host ?? $0.metadata.destinationIP ?? "—" }
+                .joined(separator: "\n")
+            Self.copy(value)
+        }
+        .disabled(conns.isEmpty)
+
+        Button("Copy IP") {
+            let value = conns
+                .map { $0.metadata.destinationIP ?? "—" }
+                .joined(separator: "\n")
+            Self.copy(value)
+        }
+        .disabled(conns.isEmpty)
+
+        Button("Copy host:port") {
+            let value = conns.map { $0.destination }.joined(separator: "\n")
+            Self.copy(value)
+        }
+        .disabled(conns.isEmpty)
+
+        Button("Copy chain") {
+            let value = conns.map { $0.chainPath }.joined(separator: "\n")
+            Self.copy(value)
+        }
+        .disabled(conns.isEmpty)
+
+        Button("Copy as JSON") {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let pieces: [String] = conns.compactMap { conn in
+                guard let data = try? encoder.encode(conn) else { return nil }
+                return String(data: data, encoding: .utf8)
+            }
+            Self.copy(pieces.joined(separator: "\n"))
+        }
+        .disabled(conns.isEmpty)
+
+        Divider()
+
+        Button("Close", role: .destructive) {
+            let api = kernel.apiClient
+            for id in ids {
+                Task { await store.close(id: id, api: api) }
+            }
+        }
+        .disabled(ids.isEmpty)
     }
 
     // MARK: - Selection helpers
@@ -296,6 +356,15 @@ struct ConnectionsView: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Pasteboard
+
+    /// Replace the system pasteboard with `s`. Used by the right-click menu's
+    /// "Copy …" actions.
+    private static func copy(_ s: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
     }
 }
 
