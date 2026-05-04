@@ -36,6 +36,22 @@ final class ProfileStore {
     private(set) var activeProfileID: UUID?
     private(set) var storageMode: StorageMode = .appSupport
 
+    // MARK: - auto-refresh
+
+    private static let autoRefreshKey = "ChungHwa.Profiles.AutoRefreshHours"
+    private static let defaultAutoRefreshHours: Double = 24
+
+    /// User-configurable interval (in hours) between automatic background
+    /// refreshes of URL-source profiles. `0` disables auto-refresh.
+    var autoRefreshHours: Double {
+        didSet {
+            UserDefaults.standard.set(autoRefreshHours, forKey: Self.autoRefreshKey)
+            startAutoRefreshLoop()
+        }
+    }
+    private(set) var lastAutoRefresh: Date?
+    private(set) var autoRefreshTask: Task<Void, Never>?
+
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "profiles")
     private let session: URLSession
     private let appSupportRoot: URL
@@ -51,8 +67,24 @@ final class ProfileStore {
         cfg.timeoutIntervalForRequest = 30
         cfg.timeoutIntervalForResource = 120
         self.session = URLSession(configuration: cfg)
+
+        let stored = UserDefaults.standard.double(forKey: Self.autoRefreshKey)
+        // Treat 0 as "unset" only on first launch: if the key was never written,
+        // `double(forKey:)` returns 0. We want 24h as the first-run default but
+        // also need to honour an explicit user choice of 0 (off). We disambiguate
+        // by checking whether the key exists.
+        if UserDefaults.standard.object(forKey: Self.autoRefreshKey) == nil {
+            self.autoRefreshHours = Self.defaultAutoRefreshHours
+        } else {
+            self.autoRefreshHours = max(0, stored)
+        }
+
         load()
+        startAutoRefreshLoop()
     }
+
+    // No deinit cancel: the loop captures `weak self`, so it returns on the
+    // first iteration after the store deallocates.
 
     // MARK: - paths
 
@@ -145,6 +177,76 @@ final class ProfileStore {
         try writeYaml(data, for: id)
         profiles[idx].updatedAt = Date()
         try save()
+    }
+
+    /// Unconditionally refresh every URL-source profile. Errors per-profile are
+    /// swallowed (logged) so one bad subscription doesn't sink the rest.
+    func refreshAll() async {
+        let urlIDs = profiles.compactMap { p -> UUID? in
+            if case .url = p.source { return p.id }
+            return nil
+        }
+        for id in urlIDs {
+            do {
+                try await refresh(id)
+            } catch {
+                log.error("refreshAll: profile \(id.uuidString, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+        lastAutoRefresh = Date()
+    }
+
+    /// Refresh URL-source profiles whose `updatedAt` is older than the
+    /// configured auto-refresh interval. Called by the background loop.
+    func refreshDueProfiles() async {
+        guard autoRefreshHours > 0 else { return }
+        let threshold = autoRefreshHours * 3600
+        let now = Date()
+        let dueIDs = profiles.compactMap { p -> UUID? in
+            guard case .url = p.source else { return nil }
+            return now.timeIntervalSince(p.updatedAt) >= threshold ? p.id : nil
+        }
+        for id in dueIDs {
+            do {
+                try await refresh(id)
+                if Task.isCancelled { break }
+            } catch {
+                log.error("auto-refresh: profile \(id.uuidString, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+        lastAutoRefresh = Date()
+    }
+
+    /// Start (or restart) the auto-refresh loop. The loop checks for due
+    /// profiles immediately, then sleeps for `min(autoRefreshHours, 1)` hours
+    /// before re-evaluating, so even a long interval re-checks at least hourly.
+    /// Cancelling the task — via setter changes or deinit — is honoured both
+    /// during sleep (`Task.sleep` throws CancellationError) and around each
+    /// per-profile fetch (`Task.isCancelled` short-circuits the inner loop).
+    func startAutoRefreshLoop() {
+        autoRefreshTask?.cancel()
+        guard autoRefreshHours > 0 else {
+            autoRefreshTask = nil
+            log.info("auto-refresh disabled")
+            return
+        }
+        let hours = autoRefreshHours
+        log.info("auto-refresh loop starting; interval=\(hours, privacy: .public)h")
+        autoRefreshTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.refreshDueProfiles()
+                if Task.isCancelled { return }
+                let sleepHours = min(self.autoRefreshHours, 1.0)
+                guard sleepHours > 0 else { return }
+                let nanos = UInt64(sleepHours * 3600 * 1_000_000_000)
+                do {
+                    try await Task.sleep(nanoseconds: nanos)
+                } catch {
+                    return // cancelled
+                }
+            }
+        }
     }
 
     func remove(_ id: UUID) throws {

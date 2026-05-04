@@ -18,6 +18,7 @@ struct ProfilesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
+                autoRefreshRow
                 storageRow
                 if let importError {
                     errorBanner(importError)
@@ -96,6 +97,82 @@ struct ProfilesView: View {
                     showImportURL = true
                 }
             }
+        }
+    }
+
+    // MARK: - Auto-refresh row
+
+    private var hasURLProfiles: Bool {
+        store.profiles.contains { p in
+            if case .url = p.source { return true }
+            return false
+        }
+    }
+
+    private var autoRefreshBinding: Binding<Double> {
+        Binding(
+            get: { store.autoRefreshHours },
+            set: { store.autoRefreshHours = $0 }
+        )
+    }
+
+    private var autoRefreshLabel: String {
+        let h = store.autoRefreshHours
+        if h <= 0 { return "Off" }
+        if h < 1 { return String(format: "%.1f h", h) }
+        return "\(Int(h)) h"
+    }
+
+    private var lastRefreshLabel: String {
+        guard let last = store.lastAutoRefresh else { return "never" }
+        let elapsed = Date.now.timeIntervalSince(last)
+        if elapsed < 60 { return "just now" }
+        let m = Int(elapsed / 60)
+        if m < 60 { return "\(m) min\(m == 1 ? "" : "s") ago" }
+        let h = m / 60
+        if h < 24 { return "\(h) hour\(h == 1 ? "" : "s") ago" }
+        let d = h / 24
+        return "\(d) day\(d == 1 ? "" : "s") ago"
+    }
+
+    private var autoRefreshRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                Text("Auto-refresh every")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                Text(autoRefreshLabel)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                    .frame(minWidth: 44, alignment: .leading)
+                    .monospacedDigit()
+                Stepper("", value: autoRefreshBinding, in: 0...168, step: 1)
+                    .labelsHidden()
+                Spacer(minLength: 8)
+                GhostButton(title: "Refresh all", systemImage: "arrow.clockwise") {
+                    Task { await store.refreshAll() }
+                }
+                .opacity(hasURLProfiles ? 1 : 0.4)
+                .allowsHitTesting(hasURLProfiles)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(ChungHwa.Palette.cardSoft)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
+            )
+
+            Text("Last auto-refresh: \(lastRefreshLabel)")
+                .font(.system(size: 10))
+                .foregroundStyle(ChungHwa.Palette.faint)
+                .padding(.leading, 14)
         }
     }
 
