@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+xcuserdata/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+.swiftpm/
+
+# Coverage / profiling
+*.profraw
+*.profdata
+
+# Vendored binaries (fetched by scripts/fetch-mihomo.sh on build)
+/Vendor/
+
+# CocoaPods (not used, but ignore preemptively)
+Pods/
+
+# Carthage (not used, but ignore preemptively)
+Carthage/Build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
