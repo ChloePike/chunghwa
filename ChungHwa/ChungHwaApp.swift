@@ -26,6 +26,10 @@ struct ChungHwaApp: App {
             MenubarContent()
                 .environment(appDelegate.kernel)
                 .environment(appDelegate.systemProxy)
+                .environment(appDelegate.configStore)
+                .environment(appDelegate.profileStore)
+                .environment(appDelegate.trafficStore)
+                .environment(appDelegate.connectionsStore)
         } label: {
             Image(systemName: MenubarIconName.current(
                 kernel: appDelegate.kernel,
