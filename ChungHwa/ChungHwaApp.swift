@@ -20,11 +20,11 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.connectionsStore)
                 .environment(appDelegate.configStore)
                 .environment(appDelegate.ruleStore)
-                .environment(appDelegate.proxyProviderStore)
                 .environment(appDelegate.anonymousMode)
                 .environment(appDelegate.loginItem)
                 .environment(appDelegate.notificationCenterStore)
                 .environment(appDelegate.networkStatusStore)
+                .environment(appDelegate.geoIPStore)
         }
         .commands {
             ChungHwaCommands()
@@ -62,12 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let connectionsStore: ConnectionsStore
     let configStore: ConfigStore
     let ruleStore: RuleStore
-    let proxyProviderStore: ProxyProviderStore
     let anonymousMode: AnonymousMode
     let kernel: KernelController
     let loginItem: LoginItemController
     let notificationCenterStore: NotificationCenterStore
     let networkStatusStore: NetworkStatusStore
+    let geoIPStore: GeoIPStore
 
     override init() {
         let resolver = KernelBinaryResolver()
@@ -80,10 +80,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let connectionsStore = ConnectionsStore()
         let configStore = ConfigStore()
         let ruleStore = RuleStore()
-        let proxyProviderStore = ProxyProviderStore()
         let anonymousMode = AnonymousMode()
         let notificationCenterStore = NotificationCenterStore()
         let networkStatusStore = NetworkStatusStore()
+        let geoIPStore = GeoIPStore()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
         self.logStore = logStore
@@ -95,10 +95,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.connectionsStore = connectionsStore
         self.configStore = configStore
         self.ruleStore = ruleStore
-        self.proxyProviderStore = proxyProviderStore
         self.anonymousMode = anonymousMode
         self.notificationCenterStore = notificationCenterStore
         self.networkStatusStore = networkStatusStore
+        self.geoIPStore = geoIPStore
         self.kernel = KernelController(
             resolver: resolver,
             logStore: logStore,

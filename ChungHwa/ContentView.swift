@@ -69,14 +69,11 @@ struct ContentView: View {
     private var detailScreen: some View {
         switch currentTab {
         case .overview:     OverviewView()
-        case .trafficStats: TrafficStatsView()
         case .connections:  ConnectionsView()
         case .logs:         LogsView()
         case .topology:     TopologyView()
-        case .routeMap:     RouteMapView()
         case .proxies:      ProxiesView()
         case .rules:        RulesView()
-        case .providers:    ProvidersView()
         case .profiles:     ProfilesView()
         case .advanced:     AdvancedView()
         case .settings:     SettingsView()
@@ -440,7 +437,6 @@ private struct StatusBar: View {
     let connectionsStore = ConnectionsStore()
     let configStore = ConfigStore()
     let ruleStore = RuleStore()
-    let proxyProviderStore = ProxyProviderStore()
     let notificationCenterStore = NotificationCenterStore()
     return ContentView()
         .environment(KernelController(
@@ -463,7 +459,6 @@ private struct StatusBar: View {
         .environment(connectionsStore)
         .environment(configStore)
         .environment(ruleStore)
-        .environment(proxyProviderStore)
         .environment(AnonymousMode())
         .environment(notificationCenterStore)
 }

@@ -15,7 +15,7 @@ private func openURL(_ string: String) {
 /// Top-level menu commands. Adds a "View" menu whose items double as keyboard
 /// shortcuts for sidebar navigation:
 ///
-/// - cmd-1 .. cmd-9 — first nine tabs (overview … providers)
+/// - cmd-1 .. cmd-8 — first eight tabs (overview … rules)
 /// - cmd-shift-, — Advanced
 /// - cmd-shift-p — Profiles
 /// - cmd-, — Settings (macOS standard for Preferences)
@@ -37,14 +37,11 @@ struct ChungHwaCommands: Commands {
     var body: some Commands {
         CommandMenu("视图") {
             tabButton(.overview,     key: "1")
-            tabButton(.trafficStats, key: "2")
-            tabButton(.connections,  key: "3")
-            tabButton(.logs,         key: "4")
-            tabButton(.topology,     key: "5")
-            tabButton(.routeMap,     key: "6")
-            tabButton(.proxies,      key: "7")
-            tabButton(.rules,        key: "8")
-            tabButton(.providers,    key: "9")
+            tabButton(.connections,  key: "2")
+            tabButton(.logs,         key: "3")
+            tabButton(.topology,     key: "4")
+            tabButton(.proxies,      key: "5")
+            tabButton(.rules,        key: "6")
 
             Divider()
 

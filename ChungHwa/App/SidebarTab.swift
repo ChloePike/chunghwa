@@ -1,9 +1,9 @@
 import Foundation
 
 enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
-    case overview, trafficStats, connections, logs
-    case topology, routeMap
-    case proxies, rules, providers
+    case overview, connections, logs
+    case topology
+    case proxies, rules
     case profiles, advanced
     case settings
 
@@ -12,14 +12,11 @@ enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .overview:      return "概览"
-        case .trafficStats:  return "流量"
         case .connections:   return "连接"
         case .logs:          return "日志"
         case .topology:      return "拓扑"
-        case .routeMap:      return "路由"
         case .proxies:       return "代理"
         case .rules:         return "规则"
-        case .providers:     return "提供方"
         case .profiles:      return "配置"
         case .advanced:      return "高级"
         case .settings:      return "设置"
@@ -28,16 +25,13 @@ enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
 
     var symbol: String {
         switch self {
-        case .overview:      return "square.grid.2x2"
-        case .trafficStats:  return "chart.line.uptrend.xyaxis"
-        case .connections:   return "link"
+        case .overview:      return "gauge.with.dots.needle.50percent"
+        case .connections:   return "arrow.left.arrow.right"
         case .logs:          return "terminal"
         case .topology:      return "point.3.connected.trianglepath.dotted"
-        case .routeMap:      return "map"
         case .proxies:       return "globe"
         case .rules:         return "list.bullet.rectangle"
-        case .providers:     return "shippingbox"
-        case .profiles:      return "doc.text"
+        case .profiles:      return "tray.full"
         case .advanced:      return "slider.horizontal.3"
         case .settings:      return "gearshape"
         }
@@ -54,9 +48,9 @@ extension SidebarTab {
     /// Sidebar layout, mirroring `design/src/app.jsx` Sidebar(). Settings is
     /// the footer slot — not present in any section.
     static let sections: [SidebarSection] = [
-        .init(id: "main",          header: nil,             tabs: [.overview, .trafficStats, .connections, .logs]),
-        .init(id: "visualization", header: "可视化",          tabs: [.topology, .routeMap]),
-        .init(id: "proxy",         header: "代理",            tabs: [.proxies, .rules, .providers]),
+        .init(id: "main",          header: nil,             tabs: [.overview, .connections, .logs]),
+        .init(id: "visualization", header: "可视化",          tabs: [.topology]),
+        .init(id: "proxy",         header: "代理",            tabs: [.proxies, .rules]),
         .init(id: "config",        header: "配置",            tabs: [.profiles, .advanced]),
     ]
 }
