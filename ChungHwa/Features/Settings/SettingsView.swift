@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Environment(KernelDownloader.self) private var downloader
     @Environment(LoginItemController.self) private var loginItem
     @AppStorage("ChungHwa.CloseKeepsRunning") private var closeKeepsRunning: Bool = true
+    @AppStorage("ChungHwa.HideDockIcon") private var hideDockIcon: Bool = false
 
     var body: some View {
         ScrollView {
@@ -113,6 +114,24 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .controlSize(.small)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(isOn: $hideDockIcon) {
+                        Text("Hide Dock icon")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(ChungHwa.Palette.text)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .onChange(of: hideDockIcon) { _, newValue in
+                        NSApp.setActivationPolicy(newValue ? .accessory : .regular)
+                    }
+
+                    Text("Run as a menubar-only app. No Dock icon, no cmd-tab. Use the menubar to bring it back.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ChungHwa.Palette.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 2)

@@ -100,6 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task { await kernel.start() }
+        let hide = UserDefaults.standard.bool(forKey: "ChungHwa.HideDockIcon")
+        NSApp.setActivationPolicy(hide ? .accessory : .regular)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
