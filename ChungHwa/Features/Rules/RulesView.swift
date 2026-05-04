@@ -29,7 +29,6 @@ struct RulesView: View {
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Rules")
         .task(id: kernel.apiClient == nil ? "off" : "on") {
             await store.refresh(api: kernel.apiClient)
         }

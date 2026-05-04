@@ -16,7 +16,6 @@ private struct ComingSoon: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
-        .navigationTitle(title)
     }
 }
 

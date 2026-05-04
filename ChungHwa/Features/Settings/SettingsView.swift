@@ -31,7 +31,6 @@ struct SettingsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .top)
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Settings")
     }
 
     // MARK: - About

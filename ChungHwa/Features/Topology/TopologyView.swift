@@ -38,7 +38,6 @@ struct TopologyView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Topology")
         .task(id: kernelStatusKey) {
             await store.refresh(api: kernel.apiClient)
         }

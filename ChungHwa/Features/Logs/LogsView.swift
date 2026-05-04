@@ -50,7 +50,6 @@ struct LogsView: View {
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ChungHwa.Palette.bg.ignoresSafeArea())
-        .navigationTitle("Logs")
         .onReceive(NotificationCenter.default.publisher(for: .chungHwaFocusFilter)) { _ in
             filterFocused = true
         }

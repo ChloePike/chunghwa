@@ -47,7 +47,6 @@ struct ConnectionsView: View {
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Connections")
         .onChange(of: liveSelectedKey) { _, _ in
             // Capture the latest live copy of the selected row so the
             // inspector keeps showing up-to-date stats AND has something to

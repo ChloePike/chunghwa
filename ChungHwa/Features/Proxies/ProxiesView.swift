@@ -43,7 +43,6 @@ struct ProxiesView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Proxies")
         .task(id: kernelStatusKey) {
             await store.refresh(api: kernel.apiClient)
             // Pre-open the first group so the user sees nodes without clicking.

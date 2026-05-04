@@ -60,7 +60,6 @@ struct ProfilesView: View {
                     .allowsHitTesting(false)
             }
         }
-        .navigationTitle("Profiles")
         .sheet(isPresented: $showImportURL) {
             ImportURLSheet(
                 urlText: $urlText,

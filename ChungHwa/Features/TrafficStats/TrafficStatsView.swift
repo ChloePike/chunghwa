@@ -42,7 +42,6 @@ struct TrafficStatsView: View {
             }
         }
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Traffic Stats")
     }
 
     // MARK: - Live (real)

@@ -23,7 +23,6 @@ struct RouteMapView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Route Map")
     }
 
     // MARK: - Header

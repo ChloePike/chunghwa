@@ -57,7 +57,6 @@ struct AdvancedView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Advanced")
         // Live-push to mihomo whenever the user flips the wired settings.
         // The @AppStorage value is the source of truth for the UI; the
         // store does an optimistic update + rollback against /configs.

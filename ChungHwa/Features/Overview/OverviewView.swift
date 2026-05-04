@@ -43,7 +43,6 @@ struct OverviewView: View {
             .padding(.horizontal, 18)
         }
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Overview")
         .onReceive(ticker) { now = $0 }
     }
 

@@ -27,7 +27,6 @@ struct ProvidersView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(ChungHwa.Palette.bg)
-        .navigationTitle("Providers")
         .task(id: kernel.apiClient == nil ? "off" : "on") {
             await ruleStore.refresh(api: kernel.apiClient)
             await proxyProviderStore.refresh(api: kernel.apiClient)
