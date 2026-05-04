@@ -1,21 +1,25 @@
 import SwiftUI
 
-/// Subscription / proxy-set providers. Mihomo exposes these via
-/// `/providers/proxies` and `/providers/rules`; we already have rule
-/// providers wired in `RuleStore`, but proxy providers (the YAML-side
-/// concept of subscriptions) need their own model + store. Until that
-/// lands, this screen surfaces what we already know via `ProfileStore` —
-/// each URL-source profile is effectively a proxy-set provider — and
-/// reuses `RuleStore.providers` for the rules half.
+/// Three views onto the "providers" concept that mihomo / our profile
+/// store expose:
+///
+/// 1. **Subscription profiles** — local URL-source profiles that *we*
+///    fetch (via `ProfileStore`). These produce the YAML mihomo loads.
+/// 2. **Proxy providers** — `/providers/proxies`, i.e. node lists mihomo
+///    itself pulls from a subscription URL or file.
+/// 3. **Rule providers** — `/providers/rules`, rule-set lists fed into
+///    the rule engine.
 struct ProvidersView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(ProfileStore.self) private var profiles
     @Environment(RuleStore.self) private var ruleStore
+    @Environment(ProxyProviderStore.self) private var proxyProviderStore
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
+                subscriptionProfilesCard
                 proxyProvidersCard
                 ruleProvidersCard
             }
@@ -26,6 +30,7 @@ struct ProvidersView: View {
         .navigationTitle("Providers")
         .task(id: kernel.apiClient == nil ? "off" : "on") {
             await ruleStore.refresh(api: kernel.apiClient)
+            await proxyProviderStore.refresh(api: kernel.apiClient)
         }
     }
 
@@ -39,14 +44,16 @@ struct ProvidersView: View {
                 .font(ChungHwa.Typography.serif(20, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.text)
                 .tracking(-0.2)
-            Text("\(subscriptionProfiles.count) proxy · \(ruleStore.providers.count) rule")
+            Text("\(subscriptionProfiles.count) subscription · \(proxyProviderStore.providers.count) proxy · \(ruleStore.providers.count) rule")
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.dim)
         }
     }
 
-    private var proxyProvidersCard: some View {
-        ChCardWithHeader("Proxy providers",
+    // MARK: - Subscription profiles (URL-source ProfileStore profiles)
+
+    private var subscriptionProfilesCard: some View {
+        ChCardWithHeader("Subscription profiles",
                          systemImage: "shippingbox",
                          iconColor: ChungHwa.Palette.patina) {
             if subscriptionProfiles.isEmpty {
@@ -60,14 +67,14 @@ struct ProvidersView: View {
                         if i > 0 {
                             Rectangle().fill(ChungHwa.Palette.lineSoft).frame(height: 0.5)
                         }
-                        proxyRow(p)
+                        subscriptionRow(p)
                     }
                 }
             }
         }
     }
 
-    private func proxyRow(_ p: Profile) -> some View {
+    private func subscriptionRow(_ p: Profile) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "doc.text")
                 .font(.system(size: 12))
@@ -91,6 +98,115 @@ struct ProvidersView: View {
         }
         .padding(.vertical, 8)
     }
+
+    // MARK: - Proxy providers (mihomo /providers/proxies)
+
+    private var proxyProvidersCard: some View {
+        ChCardWithHeader("Proxy providers",
+                         systemImage: "shippingbox",
+                         iconColor: ChungHwa.Palette.brass) {
+            if proxyProviderStore.providers.isEmpty {
+                Text(kernel.apiClient == nil
+                     ? "Kernel is not running."
+                     : "No proxy providers in the active profile.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+                    .padding(.vertical, 6)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(proxyProviderStore.providers.enumerated()), id: \.element.id) { i, p in
+                        if i > 0 {
+                            Rectangle().fill(ChungHwa.Palette.lineSoft).frame(height: 0.5)
+                        }
+                        proxyProviderRow(p)
+                    }
+                }
+            }
+        }
+    }
+
+    private func proxyProviderRow(_ p: MihomoProxyProvider) -> some View {
+        let inFlight = proxyProviderStore.updatingProviders.contains(p.name)
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "shippingbox")
+                .font(.system(size: 12))
+                .foregroundStyle(ChungHwa.Palette.brass)
+                .frame(width: 22, height: 22)
+                .background(ChungHwa.Palette.brass.opacity(0.15), in: RoundedRectangle(cornerRadius: 5))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(p.name).font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                Text("\(p.type) · \(p.vehicleType ?? "—")")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(ChungHwa.Palette.faint)
+                if let info = p.subscriptionInfo {
+                    if let used = subscriptionUsedLine(info) {
+                        Text(used)
+                            .font(ChungHwa.Typography.mono(10.5))
+                            .foregroundStyle(ChungHwa.Palette.dim)
+                    }
+                    if let expires = subscriptionExpiresLine(info) {
+                        Text(expires)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(ChungHwa.Palette.dim)
+                    }
+                }
+            }
+            Spacer()
+            HStack(spacing: 6) {
+                Button {
+                    Task { await proxyProviderStore.updateProvider(p.name, api: kernel.apiClient) }
+                } label: {
+                    if inFlight {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .disabled(kernel.apiClient == nil || inFlight)
+                .help("Refresh provider")
+
+                Button {
+                    Task { await proxyProviderStore.healthcheck(p.name, api: kernel.apiClient) }
+                } label: {
+                    Image(systemName: "heart.text.square")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .disabled(kernel.apiClient == nil || inFlight)
+                .help("Healthcheck nodes")
+            }
+            .padding(.top, 2)
+        }
+        .padding(.vertical, 8)
+    }
+
+    /// e.g. `Used: 14.2 GB / 50 GB`. Returns nil if total is zero/missing,
+    /// since "0 / 0" is meaningless for the user.
+    private func subscriptionUsedLine(_ info: MihomoProxyProvider.SubscriptionInfo) -> String? {
+        let upload = info.Upload ?? 0
+        let download = info.Download ?? 0
+        let total = info.Total ?? 0
+        let used = upload + download
+        if total <= 0 && used <= 0 { return nil }
+        if total <= 0 {
+            return "Used: \(ChFormat.bytes(used))"
+        }
+        return "Used: \(ChFormat.bytes(used)) / \(ChFormat.bytes(total))"
+    }
+
+    /// e.g. `Expires: in 26 days`. mihomo uses `0` to mean never-expires.
+    private func subscriptionExpiresLine(_ info: MihomoProxyProvider.SubscriptionInfo) -> String? {
+        guard let expire = info.Expire, expire > 0 else { return nil }
+        let date = Date(timeIntervalSince1970: TimeInterval(expire))
+        return "Expires: \(date.formatted(.relative(presentation: .named)))"
+    }
+
+    // MARK: - Rule providers
 
     private var ruleProvidersCard: some View {
         ChCardWithHeader("Rule providers",

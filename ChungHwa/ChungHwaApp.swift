@@ -20,6 +20,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.connectionsStore)
                 .environment(appDelegate.configStore)
                 .environment(appDelegate.ruleStore)
+                .environment(appDelegate.proxyProviderStore)
                 .environment(appDelegate.anonymousMode)
                 .environment(appDelegate.loginItem)
                 .environment(appDelegate.notificationCenterStore)
@@ -58,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let connectionsStore: ConnectionsStore
     let configStore: ConfigStore
     let ruleStore: RuleStore
+    let proxyProviderStore: ProxyProviderStore
     let anonymousMode: AnonymousMode
     let kernel: KernelController
     let loginItem: LoginItemController
@@ -74,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let connectionsStore = ConnectionsStore()
         let configStore = ConfigStore()
         let ruleStore = RuleStore()
+        let proxyProviderStore = ProxyProviderStore()
         let anonymousMode = AnonymousMode()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
@@ -86,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.connectionsStore = connectionsStore
         self.configStore = configStore
         self.ruleStore = ruleStore
+        self.proxyProviderStore = proxyProviderStore
         self.anonymousMode = anonymousMode
         self.kernel = KernelController(
             resolver: resolver,

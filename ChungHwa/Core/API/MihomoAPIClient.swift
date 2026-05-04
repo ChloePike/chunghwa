@@ -189,6 +189,19 @@ actor MihomoAPIClient {
         _ = try await send(makeRequest(path: "/providers/rules/\(escape(name))", method: "PUT"))
     }
 
+    func proxyProviders() async throws -> [MihomoProxyProvider] {
+        let r: MihomoProxyProvidersResponse = try await sendDecoding("/providers/proxies", method: "GET")
+        return r.providers.values.sorted { $0.name < $1.name }
+    }
+
+    func updateProxyProvider(name: String) async throws {
+        _ = try await send(makeRequest(path: "/providers/proxies/\(escape(name))", method: "PUT"))
+    }
+
+    func healthcheckProxyProvider(name: String) async throws {
+        _ = try await send(makeRequest(path: "/providers/proxies/\(escape(name))/healthcheck", method: "GET"))
+    }
+
     private nonisolated func escape(_ s: String) -> String {
         s.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? s
     }
