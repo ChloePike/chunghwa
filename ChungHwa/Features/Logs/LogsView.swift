@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
+import os.log
 
 private enum LogLevelFilter: String, CaseIterable, Identifiable {
     case all, info, warn, error
@@ -103,6 +105,15 @@ struct LogsView: View {
                     Text("Clear")
                 }
             }
+
+            ChPill(active: false, action: saveLogs) {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("Save")
+                }
+            }
+            .help("Export visible logs to a file")
         }
     }
 
@@ -219,6 +230,55 @@ struct LogsView: View {
         if paused {
             frozenLines = []
         }
+    }
+
+    private static let exportLogger = Logger(subsystem: "com.tzaigroup.chunghwa", category: "logs")
+
+    private static let exportFilenameFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        return f
+    }()
+
+    private static let exportTimestampFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private func saveLogs() {
+        let lines = visibleLines
+        let defaultFilename = "chunghwa-logs-\(Self.exportFilenameFormatter.string(from: Date())).txt"
+
+        let panel = NSSavePanel()
+        panel.title = "Save logs"
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = defaultFilename
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let body = lines.map(Self.formatLine).joined(separator: "\n")
+        do {
+            try body.write(to: url, atomically: true, encoding: .utf8)
+            Self.exportLogger.info("Exported \(lines.count, privacy: .public) log lines to \(url.path, privacy: .public)")
+        } catch {
+            Self.exportLogger.error("Failed to export logs: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private static func formatLine(_ line: LogLine) -> String {
+        let ts = exportTimestampFormatter.string(from: line.date)
+        let level: String
+        switch line.stream {
+        case .stdout:  level = "OUT"
+        case .stderr:  level = "ERR"
+        case .debug:   level = "DEBUG"
+        case .info:    level = "INFO"
+        case .warning: level = "WARN"
+        case .error:   level = "ERROR"
+        }
+        return "\(ts) [\(level)] \(line.text)"
     }
 }
 
