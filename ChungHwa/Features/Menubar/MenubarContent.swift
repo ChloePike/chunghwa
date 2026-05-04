@@ -71,7 +71,10 @@ struct MenubarContent: View {
                 on: config.tunEnabled,
                 disabled: kernel.apiClient == nil
             ) {
-                Task { await config.setTUN(!config.tunEnabled, api: kernel.apiClient) }
+                Task {
+                    await config.setTUN(!config.tunEnabled, api: kernel.apiClient)
+                    await kernel.restart()
+                }
             }
             togglePill(
                 label: "匿名",

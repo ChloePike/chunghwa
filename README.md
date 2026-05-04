@@ -1,152 +1,144 @@
-# ChungHwa · macOS native client for mihomo
+# 中華 · ChungHwa — macOS 上的 mihomo 原生客户端
 
-A SwiftUI desktop client that runs [mihomo](https://github.com/MetaCubeX/mihomo) as a managed
-child process and drives it through its External Controller HTTP + WebSocket API.
+一款 SwiftUI 桌面客户端，把 [mihomo](https://github.com/MetaCubeX/mihomo)
+作为受管子进程拉起，并通过其 External Controller 的 HTTP + WebSocket API
+驱动它。
 
-![ChungHwa Overview](design/screenshots/overview.png)
+![ChungHwa 概览](design/screenshots/overview.png)
 
-## 缘起 · Origin
+## 缘起
 
 我喜欢 [ClashMac](https://github.com/666OS/ClashMac) 的 UI，又想要
 [Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev) 的性能。
 某个上午我的 ClashMac 崩溃了无数次后，ChungHwa 诞生了。
 
-> Built after one too many ClashMac crashes — borrowing its visual taste, but
-> aiming for Clash Verge Rev's responsiveness on a native SwiftUI stack.
+## 状态
 
-## Status
+自用为主，持续开发中。面向 Apple Silicon Mac + 较新 macOS（部署目标在
+`ChungHwa.xcodeproj` 里跟最新 SDK 走，不锁 Sonoma 这种老底线）。
+未签名、未公证、未发行——克隆、编译、运行。
 
-Self-use, in active development. Built for Apple Silicon Macs on a recent macOS
-(deployment target lives in `ChungHwa.xcodeproj`; the project tracks the latest
-SDK rather than pinning a Sonoma-era floor). Not signed, not notarized, not
-distributed — clone, build, run.
+## 亮点
 
-## Highlights
+- **十二屏 SwiftUI 主窗口**：概览 / 流量 / 连接 / 日志 / 拓扑 / 路由图 /
+  代理 / 规则 / 提供方 / 配置 / 高级 / 设置
+- **Bone & Brass 自定义主题**：字号、配色、卡片基元都在 `Core/Design/`，
+  深 teal + brass + bone 调色板，跟随系统 light / dark 自适应
+- **菜单栏 + 主窗口双形态**：关窗保留菜单栏常驻，退出才清内核 + 系统代理
+- **完整的 mihomo 生命周期**：启动、停止、热重载、重启、子进程崩溃自恢复，
+  状态机集中在 `Core/Kernel/KernelController.swift`
+- **`/configs` 直连**：模式 / 日志级别 / allow-LAN / IPv6 / TCP 并发都
+  PATCH 即生效，不重启内核
+- **24 小时持久化流量历史**：内核重启 / app 重启都不丢
+- **配置管理**：拖拽 yaml / 粘贴订阅 URL / 周期自动刷新 / 应用内 yaml
+  编辑器；首次启动写一份 rule + DIRECT 兜底默认配置
+- **TUN 模式**：`KernelPrivilegeHelper` 走 `osascript with administrator
+  privileges` 一次 setuid root，gvisor 栈接管路由
+- **自定义 DNS**：DoH / DoT / DoQ / UDP 自由组合，53 端口劫持开关，
+  smart / system / fake-ip 三种 enhanced-mode
+- **自定义路由**：DOMAIN-* / IP-CIDR / GEOIP / PROCESS-NAME → DIRECT /
+  PROXY / REJECT / 任意组名（默认配置生效）
+- **GeoIP 国旗**：连接表 region 列 + 概览的「直连 IP」「代理 IP」都带国旗，
+  HTTPS 向 `ipwho.is` 查询，本地 JSON 缓存
+- **节点延迟持久化**：写到 `~/Library/Application Support/ChungHwa/proxy-delays.json`，
+  内核重启不丢测速结果
+- **入站端口可改**：mixed-port 持久化，应用按钮一键 kernel restart +
+  系统代理重新启用
+- **系统集成**：一键系统代理、登录启动、隐藏 Dock 图标、关窗保持菜单栏
+- **全局快捷键**：`⌘1`–`⌘9` 切 tab、`⌘R` 重载、`⇧⌘R` 重启内核、
+  `⌘K` 聚焦搜索、`⇧⌘K` 清空日志
 
-- **12-screen SwiftUI UI** — Overview, Traffic Stats, Connections, Logs, Topology,
-  Route Map, Proxies, Rules, Providers, Profiles, Advanced, Settings.
-- **Custom Bone & Brass theme** — typography, color tokens and reusable card
-  components live in `Core/Design/`.
-- **Menubar app + main window** — close the window and the app keeps living in
-  the menubar; quitting cleans up the kernel and system proxy.
-- **Full mihomo lifecycle** — start, stop, reload, crash-recovery, hot config
-  swap. Kernel state machine is in `Core/Kernel/KernelController.swift`.
-- **Live `/configs` wiring** — mode, log level, allow-LAN, IPv6, tcp-concurrent
-  flip on the running kernel without restart.
-- **Persistent 24 h traffic history** — survives kernel restarts and app relaunch.
-- **Profiles** — drag-drop YAML import, paste-a-URL subscriptions with automatic
-  periodic refresh, in-app YAML viewer/editor.
-- **System integration** — one-click system proxy on/off, launch-at-login,
-  hide-Dock-icon, close-window-keeps-menubar-running.
-- **Global shortcuts** — `⌘1`–`⌘9` jump between tabs, `⌘R` reload config,
-  `⌘K` focus filter, `⌘⇧K` clear logs.
-
-## Architecture
+## 架构
 
 ```
-ChungHwa.app  ──spawns──▶  mihomo child process
+ChungHwa.app  ──spawns──▶  mihomo 子进程
       │                          │
       └──── HTTP + WS  ──────────▶
             127.0.0.1:47913
 ```
 
-The app is a single non-sandboxed process that owns the mihomo binary's
-lifecycle and talks to it over loopback. Layout:
+App 是单进程、未沙盒化，独占 mihomo 的生命周期，通过 loopback 通讯。
+目录划分：
 
-- `Core/` — non-UI logic. Stores: `KernelController`, `ConfigStore`,
-  `ProxyStore`, `RuleStore`, `ConnectionsStore`, `TrafficStore`,
-  `TrafficHistoryStore`, `NotificationCenterStore`, `ProfileStore`,
-  `SystemProxyController`, `AnonymousMode`, `LoginItemController`.
-- `Features/<Tab>/` — one folder per SwiftUI screen.
-- `App/` — top-level wiring (entry point, scenes, environment injection).
-- `Core/Design/` — design tokens, shared components, theme.
+- `Core/` — 非 UI 逻辑。Stores：`KernelController` / `ConfigStore` /
+  `ProxyStore` / `RuleStore` / `ConnectionsStore` / `TrafficStore` /
+  `TrafficHistoryStore` / `ProfileStore` / `SystemProxyController` /
+  `NetworkStatusStore` / `GeoIPStore` / `NotificationCenterStore` /
+  `AnonymousMode` / `LoginItemController`
+- `Features/<Tab>/` — 每个 SwiftUI 屏一个目录
+- `App/` — 顶层接线（入口、scenes、environment 注入）
+- `Core/Design/` — 设计 token、共享组件、主题
 
-Stores are `@Observable` singletons fed by `MihomoAPIClient` (REST) and
-`MihomoStreamClient` (WebSocket streams: traffic, memory, logs, connections).
-ViewModels in `Features/` subscribe to stores; views stay declarative.
+Stores 都是 `@Observable` 单例，由 `MihomoAPIClient`（REST）+
+`MihomoStreamClient`（traffic / memory / logs / connections 四路 WebSocket）
+喂数据。`Features/` 里的 view 订阅 stores 保持声明式。
 
-See `docs/01-architecture.md` for the long version.
+详细架构见 `docs/01-architecture.md`。
 
-## Building from source
+## 编译
 
-1. Open `ChungHwa.xcodeproj` in Xcode.
-2. Apple Silicon Mac required (mihomo is fetched per-host arch by the build
-   phase).
-3. Hit `⌘R`.
+1. 用 Xcode 打开 `ChungHwa.xcodeproj`
+2. Apple Silicon Mac 必须（mihomo 按主机架构 fetch）
+3. `⌘R`
 
-The first build runs `scripts/fetch-mihomo.sh` as a pre-build phase. It
-downloads a mihomo release binary into `Vendor/mihomo/` (gitignored) and
-embeds it into `ChungHwa.app/Contents/Resources/mihomo`.
+第一次编译会跑 `scripts/fetch-mihomo.sh` 作为 pre-build phase，下载 mihomo
+release 到 `Vendor/mihomo/`（gitignored）并嵌入
+`ChungHwa.app/Contents/Resources/mihomo`。
 
-For headless builds and the os_log reading recipe, see `CLAUDE.md`.
+命令行 build / 读 os_log 的姿势见 `CLAUDE.md`。
 
-## First run
+## 首次运行
 
-1. Launch the app — kernel starts, menubar icon appears.
-2. Open the **Profiles** tab and either drag a `config.yaml` into the window
-   or paste a subscription URL.
-3. Flip **System Proxy** on from the toolbar. Browser traffic now flows through
-   mihomo.
+1. 启动 app，内核自动跑起来，菜单栏图标出现
+2. 打开 **配置** tab，拖一个 `config.yaml` 进来或粘贴订阅 URL（或者用
+   首次启动自动生成的「默认配置」）
+3. toolbar 翻 **系统代理** 开关，浏览器流量进 mihomo
+4. 想用 TUN：**设置 → TUN 与权限 → 授权**，输入一次密码后内核以 root
+   重启，TUN 即可工作
 
-## Mihomo binary management
+## mihomo 二进制管理
 
-`Core/Kernel/KernelBinaryResolver.swift` picks a binary in this order:
+`Core/Kernel/KernelBinaryResolver.swift` 三层优先级挑：
 
-1. **Custom** — a path the user picked in Settings
-   (UserDefaults key `KernelCustomBinaryPath`).
-2. **Managed** — downloaded by the in-app *Update kernel* action to
-   `~/Library/Application Support/ChungHwa/kernel/mihomo`.
-3. **Bundled** — fetched at build time by `scripts/fetch-mihomo.sh` and
-   shipped inside `ChungHwa.app/Contents/Resources/mihomo`.
+1. **Custom**：用户在设置里手选的路径（UserDefaults `KernelCustomBinaryPath`）
+2. **Managed**：应用内 *更新内核* 下载到
+   `~/Library/Application Support/ChungHwa/kernel/mihomo`
+3. **Bundled**：build 阶段由 `scripts/fetch-mihomo.sh` 拉好嵌入
+   `ChungHwa.app/Contents/Resources/mihomo`
 
-This means you can develop without ever touching mihomo manually, but you can
-also point the app at your own build during kernel work.
+平时不用碰 mihomo；做内核调试时可以指向自己 build 的版本。
 
-## Project layout
+## 目录布局
 
 ```
 ChungHwa/
-├── ChungHwa/          App source (Core/, Features/, App/, Core/Design/)
+├── ChungHwa/          App 源代码（Core/、Features/、App/、Core/Design/）
 ├── ChungHwa.xcodeproj
-├── ChungHwaTests/     Unit tests
-├── ChungHwaUITests/   UI tests
-├── docs/              Architecture, mihomo integration, modules, roadmap
-├── design/            UI mockups (HTML + JSX reference)
-├── scripts/           Build-phase scripts (fetch-mihomo.sh)
-└── Vendor/mihomo/     Gitignored — populated at build time
+├── ChungHwaTests/     单元测试
+├── ChungHwaUITests/   UI 测试
+├── docs/              架构、mihomo 集成、模块、路线图
+├── design/            UI 设计稿（HTML + JSX 参考）+ icons + screenshots
+├── scripts/           Build phase 脚本（fetch-mihomo.sh）
+└── Vendor/mihomo/     Gitignored，build 时填充
 ```
 
-## Roadmap
+## 路线图
 
-Tracked in `docs/05-roadmap.md`.
+跟踪在 `docs/05-roadmap.md`。M0–M4 + M5+ 大半已完成。
 
-- **M0 · Skeleton** — kernel lifecycle, API smoke test. Done.
-- **M1 · MVP main window** — proxies, logs, settings, system proxy, menubar. Done.
-- **M2 · Live streams** — connections, traffic chart, log stream, rules. Done.
-- **M3 · Subscriptions & profiles** — URL subscriptions, auto-refresh,
-  CoreData-backed profile store, login item. Done.
-- **M4 · Polish** — design system rebuild, theming, YAML editor, app icon.
-  In progress.
-- **M5+** — TUN mode via privileged helper, real GeoIP, per-process
-  attribution, iOS exploration.
+## 致谢
 
-## Acknowledgements
-
-- [mihomo](https://github.com/MetaCubeX/mihomo) — the actual proxy kernel.
-  Everything that's interesting about traffic routing happens there.
-- [ClashMac](https://github.com/666OS/ClashMac) — UI inspiration. Half the
-  visual decisions in this app are deliberate echoes of its menu-bar / panel
-  rhythm.
+- [mihomo](https://github.com/MetaCubeX/mihomo) — 真正的代理内核，
+  所有路由 / 规则 / 协议都在那里发生
+- [ClashMac](https://github.com/666OS/ClashMac) — UI 灵感来源，
+  这个 app 一半的视觉决策都在有意呼应它的菜单栏 / 面板节奏
 - [Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev) —
-  the performance bar. When something here feels janky, that's the standard
-  it's failing to meet.
+  性能基准。哪里手感卡了，那就是没追上的那条线
 
-## License
+## 许可证
 
-GNU General Public License v3.0. See [`LICENSE`](./LICENSE) for the full text.
+GNU General Public License v3.0。完整文本见 [`LICENSE`](./LICENSE)。
 
-ChungHwa is free software: you can redistribute it and/or modify it under the
-terms of the GNU GPL v3 as published by the Free Software Foundation. This
-program is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-A PARTICULAR PURPOSE.
+ChungHwa 是自由软件：你可以在自由软件基金会发布的 GNU GPL v3 条款下
+重新分发或修改它。本程序不附带任何担保，包括对适销性或针对特定用途
+适用性的隐含担保。

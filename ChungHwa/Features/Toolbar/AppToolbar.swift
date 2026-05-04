@@ -182,7 +182,14 @@ private struct ToolbarTUN: View {
                 )
                 return
             }
-            Task { await config.setTUN(!on, api: kernel.apiClient) }
+            // mihomo's PATCH /configs accepts tun.enable=false but doesn't
+            // reliably tear down the utun device at runtime; flip the
+            // persisted pref then restart the kernel so the new yaml drives
+            // a clean state. Same logic for on→off and off→on.
+            Task {
+                await config.setTUN(!on, api: kernel.apiClient)
+                await kernel.restart()
+            }
         } label: {
             Image(systemName: on ? "shield.lefthalf.filled" : "shield")
                 .foregroundStyle(on
