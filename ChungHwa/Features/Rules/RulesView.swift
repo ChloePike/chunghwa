@@ -11,10 +11,14 @@ struct RulesView: View {
     @Environment(RuleStore.self) private var store
 
     @State private var query: String = ""
+    @State private var typeFilter: String? = nil
 
     var body: some View {
         VStack(spacing: 10) {
             toolbar
+            if !typeCounts.isEmpty {
+                typeFilterRow
+            }
             if !store.providers.isEmpty {
                 providersBanner
             }
@@ -34,12 +38,29 @@ struct RulesView: View {
 
     private var filtered: [MihomoRule] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return store.rules }
-        return store.rules.filter {
-            $0.type.lowercased().contains(q) ||
-            $0.payload.lowercased().contains(q) ||
-            $0.proxy.lowercased().contains(q)
+        return store.rules.filter { rule in
+            if let t = typeFilter, rule.type != t { return false }
+            if q.isEmpty { return true }
+            return rule.type.lowercased().contains(q)
+                || rule.payload.lowercased().contains(q)
+                || rule.proxy.lowercased().contains(q)
         }
+    }
+
+    private var typeCounts: [(type: String, count: Int)] {
+        let grouped = Dictionary(grouping: store.rules, by: { $0.type }).mapValues(\.count)
+        return grouped
+            .filter { $0.value >= 1 }
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                return lhs.key < rhs.key
+            }
+            .map { (type: $0.key, count: $0.value) }
+    }
+
+    private var hasActiveFilter: Bool {
+        typeFilter != nil ||
+            !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Toolbar (search + refresh)
@@ -92,6 +113,67 @@ struct RulesView: View {
         let shown = filtered.count
         if shown == total { return "\(total) rules" }
         return "\(shown) / \(total) rules"
+    }
+
+    // MARK: - Type filter chips
+
+    private var typeFilterRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    typeChip(label: "All", count: store.rules.count, isActive: typeFilter == nil) {
+                        typeFilter = nil
+                    }
+                    ForEach(typeCounts, id: \.type) { entry in
+                        typeChip(
+                            label: entry.type,
+                            count: entry.count,
+                            isActive: typeFilter == entry.type
+                        ) {
+                            typeFilter = (typeFilter == entry.type) ? nil : entry.type
+                        }
+                    }
+                }
+                .padding(.horizontal, 1)
+                .padding(.vertical, 1)
+            }
+            if hasActiveFilter {
+                Text("Showing \(filtered.count) of \(store.rules.count)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .monospacedDigit()
+            }
+        }
+    }
+
+    private func typeChip(label: String,
+                          count: Int,
+                          isActive: Bool,
+                          action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(label.uppercased())
+                    .font(ChungHwa.Typography.mono(10, weight: .semibold))
+                    .foregroundStyle(isActive ? ChungHwa.Palette.text : ChungHwa.Palette.dim)
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isActive ? ChungHwa.Palette.brass : ChungHwa.Palette.faint)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(isActive
+                          ? ChungHwa.Palette.brass.opacity(0.20)
+                          : Color.clear)
+                    .strokeBorder(
+                        isActive ? ChungHwa.Palette.brass : ChungHwa.Palette.line,
+                        lineWidth: 0.5
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Providers banner
