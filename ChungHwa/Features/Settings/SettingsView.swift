@@ -9,6 +9,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                ProfilesSection()
                 kernelBinarySection
             }
             .padding(20)

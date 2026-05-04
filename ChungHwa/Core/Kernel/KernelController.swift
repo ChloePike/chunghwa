@@ -35,12 +35,14 @@ final class KernelController {
 
     private let resolver: KernelBinaryResolver
     private let logStore: LogStore
+    private let profileStore: ProfileStore
     private let dataDir: URL
     private let configFile: URL
 
-    init(resolver: KernelBinaryResolver, logStore: LogStore) {
+    init(resolver: KernelBinaryResolver, logStore: LogStore, profileStore: ProfileStore) {
         self.resolver = resolver
         self.logStore = logStore
+        self.profileStore = profileStore
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.dataDir = appSupport
@@ -60,7 +62,8 @@ final class KernelController {
             try FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
 
             let secret = generateSecret()
-            try writeBootstrapConfig(secret: secret)
+            self.runtimeSecret = secret
+            try writeComposedConfig(secret: secret)
 
             resolver.refresh()
             guard let binary = resolver.current else {
@@ -115,18 +118,17 @@ final class KernelController {
         status = .idle
     }
 
-    /// 热加载：让 mihomo 重新读取配置文件，进程不重启、连接不中断。
-    /// 调用前先把新配置写入 `configFile`，再调本方法。
-    /// 内核未运行时降级为 start()。
+    /// 热加载：把当前 active profile 的 yaml 重新合成、写到 configFile，再让 mihomo 重读。
+    /// 进程不重启、连接不中断。内核未运行时降级为 start()。
     func reload() async {
-        guard case .running = status, let client = apiClient else {
+        guard case .running = status, let client = apiClient, let secret = runtimeSecret else {
             await start()
             return
         }
         do {
+            try writeComposedConfig(secret: secret)
             try await client.reloadConfig(path: configFile.path)
             log.info("mihomo config reloaded")
-            // 复测一次 version，确认 reload 后内核仍存活；失败则视作降级
             if let v = try? await client.version().version {
                 status = .running(version: v)
             }
@@ -146,17 +148,17 @@ final class KernelController {
     /// 暴露当前用于启动 mihomo 的配置文件路径，方便外层在 reload 前写入新内容。
     var activeConfigFile: URL { configFile }
 
+    private var runtimeSecret: String?
+
     // MARK: - private
 
-    private func writeBootstrapConfig(secret: String) throws {
-        let yaml = """
-        mixed-port: 7890
-        allow-lan: false
-        mode: rule
-        log-level: info
-        external-controller: 127.0.0.1:\(externalControllerPort)
-        secret: \(secret)
-        """
+    private func writeComposedConfig(secret: String) throws {
+        let userYaml = profileStore.activeYamlContent
+        let yaml = ConfigComposer.compose(
+            userYaml: userYaml,
+            externalControllerHostPort: "127.0.0.1:\(externalControllerPort)",
+            secret: secret
+        )
         try yaml.write(to: configFile, atomically: true, encoding: .utf8)
     }
 
@@ -205,6 +207,7 @@ final class KernelController {
         process = nil
         apiClient = nil
         activeBinary = nil
+        runtimeSecret = nil
     }
 
     private func handleTermination(exitCode: Int32) {

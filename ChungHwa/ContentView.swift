@@ -23,9 +23,11 @@ struct ContentView: View {
 #Preview {
     let resolver = KernelBinaryResolver()
     let logStore = LogStore()
+    let profileStore = ProfileStore()
     return ContentView()
-        .environment(KernelController(resolver: resolver, logStore: logStore))
+        .environment(KernelController(resolver: resolver, logStore: logStore, profileStore: profileStore))
         .environment(resolver)
         .environment(KernelDownloader(resolver: resolver))
         .environment(logStore)
+        .environment(profileStore)
 }
