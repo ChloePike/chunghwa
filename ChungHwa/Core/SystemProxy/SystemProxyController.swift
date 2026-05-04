@@ -28,7 +28,10 @@ final class SystemProxyController {
 
     let host = "127.0.0.1"
     /// mihomo's mixed-port handles HTTP CONNECT and SOCKS5 on the same port.
-    var port: Int = 7890
+    /// Reads from `ConfigStore.currentMixedPort` so changing the port in
+    /// Settings + restarting the kernel automatically routes the system
+    /// proxy at the new port without a separate write here.
+    var port: Int { ConfigStore.currentMixedPort }
 
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "systemProxy")
 

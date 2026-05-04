@@ -11,18 +11,23 @@ struct SettingsView: View {
     @Environment(KernelBinaryResolver.self) private var resolver
     @Environment(KernelDownloader.self) private var downloader
     @Environment(LoginItemController.self) private var loginItem
+    @Environment(ConfigStore.self) private var configStore
+    @Environment(SystemProxyController.self) private var systemProxy
     @AppStorage("ChungHwa.CloseKeepsRunning") private var closeKeepsRunning: Bool = true
     @AppStorage("ChungHwa.HideDockIcon") private var hideDockIcon: Bool = false
 
     @State private var localChecking: Bool = false
     @State private var grantingPrivileges: Bool = false
     @State private var privilegeError: String?
+    @State private var portDraft: Int = ConfigStore.currentMixedPort
+    @State private var applyingPort: Bool = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 aboutCard
                 startupCard
+                inboundPortCard
                 updatesCard
                 kernelBinaryCard
                 tunPrivilegeCard
@@ -141,6 +146,75 @@ struct SettingsView: View {
             .padding(.horizontal, 14)
             .padding(.top, 2)
             .padding(.bottom, 4)
+        }
+    }
+
+    // MARK: - Inbound port
+
+    /// Edits mihomo's mixed-port (HTTP CONNECT + SOCKS5 on the same listener).
+    /// Apply restarts the kernel and re-applies the system proxy at the new
+    /// port if it was previously enabled.
+    private var inboundPortCard: some View {
+        ChCardWithHeader("入站端口",
+                         systemImage: "arrow.down.to.line.compact",
+                         iconColor: ChungHwa.Palette.patina) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Mixed-Port")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(ChungHwa.Palette.text)
+                        Text("HTTP CONNECT + SOCKS5 共用同一端口")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(ChungHwa.Palette.dim)
+                    }
+                    Spacer(minLength: 0)
+                    TextField("", value: $portDraft, format: .number.grouping(.never))
+                        .frame(width: 96)
+                        .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                        .disabled(applyingPort)
+                    Button {
+                        Task { await applyPort() }
+                    } label: {
+                        Text(applyingPort ? "应用中…" : "应用")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .padding(.horizontal, 10)
+                            .frame(height: 24)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(!portIsValid || portMatchesPersisted || applyingPort)
+                }
+
+                Text("修改端口会重启 mihomo 内核；如果系统代理是开着的，会用新端口重新启用。")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 6)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private var portIsValid: Bool { (1...65535).contains(portDraft) }
+    private var portMatchesPersisted: Bool { portDraft == configStore.mixedPort }
+
+    private func applyPort() async {
+        guard portIsValid else { return }
+        applyingPort = true
+        defer { applyingPort = false }
+        let wasOn = systemProxy.enabled
+        if wasOn { systemProxy.disable() }
+        configStore.setMixedPort(portDraft)
+        await kernel.restart()
+        // Wait for the kernel to bind the new listener before re-applying
+        // the SCPreferences change — otherwise enable() races against a
+        // half-up listener and the user briefly loses the internet.
+        if wasOn {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            systemProxy.enable()
         }
     }
 

@@ -38,10 +38,11 @@ final class NetworkStatusStore {
 
     @ObservationIgnored private var autoRefreshTask: Task<Void, Never>?
 
-    /// mihomo's default mixed/HTTP proxy port. We read it once here so that
-    /// the proxy probe doesn't depend on touching MihomoAPIClient state.
+    /// mihomo's default mixed/HTTP proxy port. The probe reads from
+    /// `ConfigStore.currentMixedPort` so port changes in Settings flow
+    /// through without a separate write here.
     private let proxyHost = "127.0.0.1"
-    private let proxyPort: Int = 7890
+    private var proxyPort: Int { ConfigStore.currentMixedPort }
 
     private static let autoRefreshInterval: UInt64 = 30 * 1_000_000_000
 

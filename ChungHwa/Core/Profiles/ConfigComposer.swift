@@ -11,16 +11,21 @@ enum ConfigComposer {
         let bodyRaw = userYaml ?? defaultBody
         // First strip block-style keys (tun + its children), then inline keys.
         let withoutBlocks = stripTopLevelBlocks(bodyRaw, keys: ["tun"])
+        // Strip user's port keys so our override wins. mihomo refuses
+        // duplicate top-level keys, and we keep the inbound port in app
+        // state, not the user yaml.
         let stripped = stripTopLevelKeys(
             withoutBlocks,
-            keys: ["external-controller", "secret"]
+            keys: ["external-controller", "secret", "mixed-port", "port", "socks-port"]
         )
         let body = trimmedTrailing(stripped)
         let tunEnabled = UserDefaults.standard.bool(forKey: ConfigStore.tunEnabledDefaultsKey)
+        let mixedPort = ConfigStore.currentMixedPort
         return """
         \(body)
 
         # === ChungHwa overrides — managed by the app, do not edit ===
+        mixed-port: \(mixedPort)
         external-controller: \(externalControllerHostPort)
         secret: \(secret)
         tun:

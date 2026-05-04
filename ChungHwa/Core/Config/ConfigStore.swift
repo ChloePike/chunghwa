@@ -17,15 +17,26 @@ final class ConfigStore {
     /// key — `MihomoConfig.tun` is not modeled, so this is what the UI binds
     /// against and what `ConfigComposer` injects into the boot yaml.
     private(set) var tunEnabled: Bool
+    /// Persisted mixed-port (mihomo's combined HTTP/SOCKS5 inbound). Mirrors
+    /// `ChungHwa.MixedPort` UserDefaults; `ConfigComposer`, system proxy
+    /// apply, and the network probe all read from the same key.
+    private(set) var mixedPort: Int
     private(set) var lastError: String?
     private(set) var isApplyingMode: Bool = false
 
     static let tunEnabledDefaultsKey = "ChungHwa.TunEnabled"
+    static let mixedPortDefaultsKey = "ChungHwa.MixedPort"
+    static let defaultMixedPort = 7890
+
+    static var currentMixedPort: Int {
+        UserDefaults.standard.object(forKey: mixedPortDefaultsKey) as? Int ?? defaultMixedPort
+    }
 
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "config")
 
     init() {
         self.tunEnabled = UserDefaults.standard.bool(forKey: Self.tunEnabledDefaultsKey)
+        self.mixedPort = Self.currentMixedPort
     }
 
     func reset() {
@@ -144,6 +155,17 @@ final class ConfigStore {
             lastError = String(describing: error)
             log.error("set tun \(enabled, privacy: .public) failed: \(self.lastError ?? "?", privacy: .public)")
         }
+    }
+
+    /// Persist a new mixed-port. The kernel does NOT hot-reload listening
+    /// ports via PATCH /configs, so the caller must restart the kernel for
+    /// the change to take effect. Returns false on invalid range.
+    @discardableResult
+    func setMixedPort(_ port: Int) -> Bool {
+        guard (1...65535).contains(port) else { return false }
+        mixedPort = port
+        UserDefaults.standard.set(port, forKey: Self.mixedPortDefaultsKey)
+        return true
     }
 
     /// Push the tcp-concurrent flag. Optimistic + rollback on failure.
