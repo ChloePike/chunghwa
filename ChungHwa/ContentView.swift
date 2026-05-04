@@ -23,6 +23,13 @@ struct ContentView: View {
     @Environment(ProxyStore.self) private var proxyStore
     @Environment(RuleStore.self) private var ruleStore
     @Environment(NotificationCenterStore.self) private var notifications
+    @Environment(ProfileStore.self) private var profileStore
+
+    @AppStorage("ChungHwa.OnboardingDismissed") private var onboardingDismissed: Bool = false
+
+    private var showOnboarding: Bool {
+        profileStore.profiles.isEmpty && !onboardingDismissed
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -31,6 +38,12 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 AppToolbar(title: title, onSwitchToProfiles: { selection = .profiles })
                 ErrorBanner(bus: errorBus)
+                if showOnboarding {
+                    OnboardingBanner(
+                        onCreate: { selection = .profiles },
+                        onDismiss: { onboardingDismissed = true }
+                    )
+                }
                 detailScreen
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 StatusBar()
@@ -127,6 +140,58 @@ private struct ErrorBanner: View {
             }
         }
         .animation(.snappy(duration: 0.18), value: bus.current?.posted)
+    }
+}
+
+private struct OnboardingBanner: View {
+    let onCreate: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 16))
+                .foregroundStyle(ChungHwa.Palette.brass)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Welcome to ChungHwa")
+                    .font(ChungHwa.Typography.serif(14))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                Text("Add a YAML profile to get started.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ChungHwa.Palette.text)
+            }
+            Spacer(minLength: 8)
+            Button(action: onCreate) {
+                Text("Create profile")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(ChungHwa.Palette.bone)
+                    .padding(.horizontal, 12)
+                    .frame(height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(ChungHwa.Palette.brass)
+                    )
+            }
+            .buttonStyle(.plain)
+            Button(action: onDismiss) {
+                Text("Dismiss")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                    .padding(.horizontal, 10)
+                    .frame(height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .background(ChungHwa.Palette.brass.opacity(0.10))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ChungHwa.Palette.brass.opacity(0.5))
+                .frame(height: 0.5)
+        }
     }
 }
 
