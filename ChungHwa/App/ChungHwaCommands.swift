@@ -1,9 +1,15 @@
+import AppKit
 import SwiftUI
 
 /// Notification posted when the user invokes the "Focus Filter" menu command.
 /// Feature views with a search field listen for this to grab keyboard focus.
 extension Notification.Name {
     static let chungHwaFocusFilter = Notification.Name("ChungHwa.FocusFilter")
+}
+
+private func openURL(_ string: String) {
+    guard let url = URL(string: string) else { return }
+    NSWorkspace.shared.open(url)
 }
 
 /// Top-level menu commands. Adds a "View" menu whose items double as keyboard
@@ -64,6 +70,32 @@ struct ChungHwaCommands: Commands {
                 NotificationCenter.default.post(name: .chungHwaFocusFilter, object: nil)
             }
             .keyboardShortcut("k", modifiers: [.command])
+        }
+
+        CommandGroup(replacing: .help) {
+            Button("ChungHwa on GitHub") {
+                openURL("https://github.com/ChloePike/chunghwa")
+            }
+
+            Button("Report an Issue") {
+                openURL("https://github.com/ChloePike/chunghwa/issues/new")
+            }
+
+            Divider()
+
+            Button("mihomo Documentation") {
+                openURL("https://wiki.metacubex.one/")
+            }
+
+            Button("mihomo on GitHub") {
+                openURL("https://github.com/MetaCubeX/mihomo")
+            }
+
+            Divider()
+
+            Button("About ChungHwa") {
+                NSApplication.shared.orderFrontStandardAboutPanel(nil)
+            }
         }
     }
 
