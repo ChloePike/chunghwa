@@ -23,6 +23,9 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.anonymousMode)
                 .environment(appDelegate.loginItem)
         }
+        .commands {
+            ChungHwaCommands()
+        }
 
         MenuBarExtra {
             MenubarContent()

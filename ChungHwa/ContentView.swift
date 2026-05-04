@@ -14,6 +14,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 600)
+        .focusedSceneValue(\.sidebarSelection, $selection)
     }
 
     private var title: String {
