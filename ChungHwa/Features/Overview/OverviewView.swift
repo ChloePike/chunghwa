@@ -12,7 +12,6 @@ struct OverviewView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                HeroStatusCard()
                 LiveTrafficCard()
 
                 // Three short cards in one row — same intrinsic content height
@@ -45,130 +44,6 @@ struct OverviewView: View {
 /// Posts the sidebar-switch notification ContentView already listens for.
 private func switchTab(_ tab: SidebarTab) {
     NotificationCenter.default.post(name: .chungHwaSwitchTab, object: tab.rawValue)
-}
-
-// MARK: - 1. Hero status
-
-/// Full-width status hero. The kernel status string itself only flips on
-/// kernel state changes, but we still keep this in its own view so the rest
-/// of the page doesn't re-render with it.
-private struct HeroStatusCard: View {
-    @Environment(KernelController.self) private var kernel
-    @Environment(ConfigStore.self) private var configStore
-    @Environment(ProfileStore.self) private var profileStore
-
-    var body: some View {
-        ChCard(padding: 14) {
-            HStack(alignment: .center, spacing: 14) {
-                statusBadge
-                Spacer(minLength: 0)
-                HStack(spacing: 6) {
-                    modeChip
-                    if let p = profileStore.activeProfile {
-                        profileChip(p.name)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var statusBadge: some View {
-        HStack(spacing: 10) {
-            ChDot(color: badgeColor, size: 10, pulse: isStarting || isRunning)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(badgeTitle)
-                    .font(ChungHwa.Typography.serif(26, weight: .semibold))
-                    .tracking(-0.4)
-                    .foregroundStyle(ChungHwa.Palette.text)
-                Text(badgeSubtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(ChungHwa.Palette.dim)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    private var modeChip: some View {
-        let label = configStore.mode?.displayName ?? "—"
-        let recommended = configStore.mode == .rule
-        return HStack(spacing: 4) {
-            Image(systemName: "scope")
-                .font(.system(size: 10, weight: .medium))
-            Text("模式 · \(label)")
-                .font(.system(size: 11, weight: .semibold))
-            if recommended {
-                Text("推荐")
-                    .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(ChungHwa.Palette.brass)
-            }
-        }
-        .foregroundStyle(ChungHwa.Palette.text)
-        .padding(.horizontal, 9)
-        .frame(height: 22)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(ChungHwa.Palette.fill)
-                .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
-        )
-    }
-
-    private func profileChip(_ name: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "tray.full")
-                .font(.system(size: 10, weight: .medium))
-            Text(name)
-                .font(.system(size: 11, weight: .medium))
-                .lineLimit(1).truncationMode(.middle)
-        }
-        .foregroundStyle(ChungHwa.Palette.dim)
-        .padding(.horizontal, 9)
-        .frame(height: 22)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(ChungHwa.Palette.fill)
-                .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
-        )
-        .frame(maxWidth: 220, alignment: .leading)
-    }
-
-    // MARK: derived
-
-    private var isRunning: Bool {
-        if case .running = kernel.status { return true }
-        return false
-    }
-    private var isStarting: Bool {
-        if case .starting = kernel.status { return true }
-        return false
-    }
-
-    private var badgeTitle: String {
-        switch kernel.status {
-        case .running:  return "已连接"
-        case .starting: return "启动中"
-        case .failed:   return "错误"
-        case .idle:     return "已断开"
-        }
-    }
-
-    private var badgeSubtitle: String {
-        switch kernel.status {
-        case .running(let v):  return "mihomo · \(v)"
-        case .starting:        return "正在拉起 mihomo…"
-        case .failed(let r):   return r
-        case .idle:            return "内核未运行"
-        }
-    }
-
-    private var badgeColor: Color {
-        switch kernel.status {
-        case .running:  return ChungHwa.Palette.patina
-        case .starting: return ChungHwa.Palette.brass
-        case .failed:   return ChungHwa.Palette.earth
-        case .idle:     return ChungHwa.Palette.faint
-        }
-    }
 }
 
 // MARK: - 2. Live traffic
@@ -612,7 +487,7 @@ private struct NetworkCard: View {
                 .buttonStyle(.plain)
             }
         ) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
                     latencyBlock("互联网", ms: net.internetLatencyMs, symbol: "globe.americas")
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -621,10 +496,7 @@ private struct NetworkCard: View {
                     latencyBlock("路由", ms: net.routerLatencyMs, symbol: "wifi.router")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                Rectangle()
-                    .fill(ChungHwa.Palette.lineSoft)
-                    .frame(height: 0.5)
+                .frame(height: statTopRowHeight)
 
                 HStack(alignment: .top, spacing: 12) {
                     ChSubStat("出口 IP", systemImage: "cloud") {
@@ -636,6 +508,7 @@ private struct NetworkCard: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(height: statBottomRowHeight)
             }
         }
     }
@@ -644,7 +517,7 @@ private struct NetworkCard: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 Image(systemName: symbol)
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                 Text(label)
                     .font(.system(size: 10.5, weight: .medium))
@@ -652,19 +525,24 @@ private struct NetworkCard: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(ms.map(String.init) ?? "—")
-                    .font(ChungHwa.Typography.serif(20, weight: .medium))
-                    .tracking(-0.3)
+                    .font(ChungHwa.Typography.serif(26, weight: .medium))
+                    .tracking(-0.4)
                     .foregroundStyle(ms.map { ChLatency.color($0) } ?? ChungHwa.Palette.dim)
                     .monospacedDigit()
                 if ms != nil {
                     Text("ms")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(ChungHwa.Palette.dim)
                 }
             }
         }
     }
 }
+
+// Shared row heights so the three cards in the overview's 3-col band line
+// up at the same vertical positions regardless of internal content.
+private let statTopRowHeight: CGFloat = 54
+private let statBottomRowHeight: CGFloat = 36
 
 // MARK: - 5. Active connections + resources
 
@@ -676,24 +554,22 @@ private struct ResourcesCard: View {
             iconColor: ChungHwa.Palette.patina,
             right: { EmptyView() }
         ) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
                     ConnectionCountStat()
                         .frame(maxWidth: .infinity, alignment: .leading)
                     MemoryStat()
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                Rectangle()
-                    .fill(ChungHwa.Palette.lineSoft)
-                    .frame(height: 0.5)
+                .frame(height: statTopRowHeight)
 
                 HStack(alignment: .top, spacing: 12) {
-                    PeakStat(direction: .up)
+                    PeakSubStat(direction: .up)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    PeakStat(direction: .down)
+                    PeakSubStat(direction: .down)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(height: statBottomRowHeight)
             }
         }
     }
@@ -730,7 +606,10 @@ private struct MemoryStat: View {
     }
 }
 
-private struct PeakStat: View {
+/// Peak rate as a sub-stat (smaller font) so it shares vertical rhythm with
+/// NetworkCard's "出口 IP / 本地 IP" sub-stat row instead of duplicating the
+/// big serif of the top stat row.
+private struct PeakSubStat: View {
     enum Direction { case up, down }
     let direction: Direction
 
@@ -738,11 +617,10 @@ private struct PeakStat: View {
 
     var body: some View {
         let bps = direction == .up ? traffic.peakUp : traffic.peakDown
-        ChStat(
-            label: direction == .up ? "峰值 ↑" : "峰值 ↓",
+        ChSubStat(
+            direction == .up ? "峰值 ↑" : "峰值 ↓",
             value: bps > 0 ? ChFormat.rate(bps) : "—",
-            systemImage: direction == .up ? "arrow.up.right" : "arrow.down.right",
-            color: direction == .up ? ChungHwa.Palette.patina : ChungHwa.Palette.brass
+            systemImage: direction == .up ? "arrow.up.right" : "arrow.down.right"
         )
     }
 }
@@ -764,7 +642,7 @@ private struct SubscriptionHealthCard: View {
             iconColor: ChungHwa.Palette.brass,
             right: { refreshButton }
         ) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
                     ChStat(
                         label: "节点",
@@ -785,10 +663,7 @@ private struct SubscriptionHealthCard: View {
                     .buttonStyle(.plain)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                Rectangle()
-                    .fill(ChungHwa.Palette.lineSoft)
-                    .frame(height: 0.5)
+                .frame(height: statTopRowHeight)
 
                 HStack(alignment: .center, spacing: 8) {
                     Image(systemName: "clock.arrow.circlepath")
@@ -809,6 +684,7 @@ private struct SubscriptionHealthCard: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .frame(height: statBottomRowHeight)
             }
         }
         .task(id: kernel.startedAt) {

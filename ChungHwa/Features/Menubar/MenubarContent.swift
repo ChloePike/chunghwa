@@ -432,7 +432,10 @@ private struct NodeListPopover: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            // LazyVStack so a 100-node group materializes rows on demand —
+            // popover used to take a noticeable beat to appear when the
+            // active group had many members. Lazy is near-instant.
+            LazyVStack(spacing: 0) {
                 if names.isEmpty {
                     Text("（无节点）")
                         .font(.system(size: 11.5))
@@ -462,7 +465,7 @@ private struct ProfileListPopover: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 if profiles.isEmpty {
                     Text("（暂无配置）")
                         .font(.system(size: 11.5))
