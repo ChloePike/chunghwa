@@ -37,6 +37,13 @@ final class KernelDownloader {
 
     private(set) var state: State = .idle
 
+    /// Latest mihomo tag observed by `checkForUpdates()`. `nil` until first
+    /// successful background check.
+    private(set) var latestKnown: String?
+
+    /// Wall-clock timestamp of the most recent successful `checkForUpdates()`.
+    private(set) var lastChecked: Date?
+
     private let resolver: KernelBinaryResolver
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "downloader")
     private let session: URLSession
@@ -61,8 +68,11 @@ final class KernelDownloader {
     func updateLatest() async {
         do {
             state = .fetchingMetadata
-            let version = try await fetchLatestVersion()
+            let info = try await fetchLatestVersionInfo()
+            let version = info.version
             log.info("latest mihomo tag: \(version, privacy: .public)")
+            latestKnown = version
+            lastChecked = Date()
 
             let arch = nativeArch()
             state = .downloading(version: version)
@@ -86,7 +96,9 @@ final class KernelDownloader {
 
     // MARK: - phases
 
-    private func fetchLatestVersion() async throws -> String {
+    /// Fetch the latest release tag from GitHub without downloading the asset.
+    /// Returns the tag and the canonical releases-page URL for the user to inspect.
+    func fetchLatestVersionInfo() async throws -> (version: String, url: URL) {
         let url = URL(string: "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest")!
         var req = URLRequest(url: url)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -94,10 +106,29 @@ final class KernelDownloader {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw KernelDownloadError.metadata("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
         }
-        struct Release: Decodable { let tag_name: String }
+        struct Release: Decodable {
+            let tag_name: String
+            let html_url: String?
+        }
         let r = try JSONDecoder().decode(Release.self, from: data)
         guard !r.tag_name.isEmpty else { throw KernelDownloadError.metadata("empty tag_name") }
-        return r.tag_name
+        let pageURL = (r.html_url.flatMap(URL.init(string:)))
+            ?? URL(string: "https://github.com/MetaCubeX/mihomo/releases/tag/\(r.tag_name)")!
+        return (r.tag_name, pageURL)
+    }
+
+    /// Background check: refresh `latestKnown` / `lastChecked` without
+    /// downloading. Failures are logged and swallowed.
+    func checkForUpdates() async {
+        do {
+            let info = try await fetchLatestVersionInfo()
+            latestKnown = info.version
+            lastChecked = Date()
+            log.info("checkForUpdates: latest=\(info.version, privacy: .public)")
+        } catch {
+            let msg = String(describing: error)
+            log.error("checkForUpdates failed: \(msg, privacy: .public)")
+        }
     }
 
     private func downloadAsset(version: String, arch: String) async throws -> Data {

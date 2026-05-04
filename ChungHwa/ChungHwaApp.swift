@@ -105,6 +105,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await kernel.start() }
         let hide = UserDefaults.standard.bool(forKey: "ChungHwa.HideDockIcon")
         NSApp.setActivationPolicy(hide ? .accessory : .regular)
+
+        // Initial kernel-update check, delayed so we don't compete with kernel startup.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+            await self.downloader.checkForUpdates()
+            self.notifyIfKernelUpdateAvailable()
+        }
+
+        // Daily re-check.
+        Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(24 * 3600 * 1_000_000_000))
+                await self.downloader.checkForUpdates()
+                self.notifyIfKernelUpdateAvailable()
+            }
+        }
+    }
+
+    /// Compare `downloader.latestKnown` against the currently-installed
+    /// managed-kernel version and post an info notification if a newer release
+    /// is available. No-op when we have no current version yet.
+    private func notifyIfKernelUpdateAvailable() {
+        guard let latest = downloader.latestKnown, !latest.isEmpty else { return }
+        // We only know an installed version for the managed binary; for custom
+        // / bundled, skip — user is driving their own kernel.
+        guard let installed = resolver.managedVersion(), !installed.isEmpty else { return }
+        guard latest != installed else { return }
+        notificationCenterStore.post(
+            source: "Kernel",
+            level: .info,
+            message: "mihomo \(latest) is available · open Settings → Update kernel"
+        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
