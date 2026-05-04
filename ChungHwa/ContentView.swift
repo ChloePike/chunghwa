@@ -30,4 +30,5 @@ struct ContentView: View {
         .environment(KernelDownloader(resolver: resolver))
         .environment(logStore)
         .environment(profileStore)
+        .environment(SystemProxyController())
 }

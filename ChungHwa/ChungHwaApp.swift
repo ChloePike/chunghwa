@@ -13,6 +13,17 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.downloader)
                 .environment(appDelegate.logStore)
                 .environment(appDelegate.profileStore)
+                .environment(appDelegate.systemProxy)
+        }
+
+        MenuBarExtra {
+            MenubarContent()
+                .environment(appDelegate.kernel)
+                .environment(appDelegate.systemProxy)
+        } label: {
+            Image(systemName: MenubarIconName.current(
+                kernel: appDelegate.kernel,
+                systemProxy: appDelegate.systemProxy))
         }
     }
 }
@@ -23,16 +34,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let downloader: KernelDownloader
     let logStore: LogStore
     let profileStore: ProfileStore
+    let systemProxy: SystemProxyController
     let kernel: KernelController
 
     override init() {
         let resolver = KernelBinaryResolver()
         let logStore = LogStore()
         let profileStore = ProfileStore()
+        let systemProxy = SystemProxyController()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
         self.logStore = logStore
         self.profileStore = profileStore
+        self.systemProxy = systemProxy
         self.kernel = KernelController(resolver: resolver, logStore: logStore, profileStore: profileStore)
         super.init()
     }
@@ -42,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if systemProxy.enabled { systemProxy.disable() }
         kernel.stop()
     }
 }
