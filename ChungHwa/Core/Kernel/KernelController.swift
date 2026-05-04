@@ -40,6 +40,7 @@ final class KernelController {
     private let profileStore: ProfileStore
     private let trafficStore: TrafficStore
     private let connectionsStore: ConnectionsStore
+    private let configStore: ConfigStore
     private let dataDir: URL
     private let configFile: URL
 
@@ -47,12 +48,14 @@ final class KernelController {
          logStore: LogStore,
          profileStore: ProfileStore,
          trafficStore: TrafficStore,
-         connectionsStore: ConnectionsStore) {
+         connectionsStore: ConnectionsStore,
+         configStore: ConfigStore) {
         self.resolver = resolver
         self.logStore = logStore
         self.profileStore = profileStore
         self.trafficStore = trafficStore
         self.connectionsStore = connectionsStore
+        self.configStore = configStore
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.dataDir = appSupport
@@ -115,6 +118,7 @@ final class KernelController {
             let version = try await waitForReady(client: client, timeout: 8)
             status = .running(version: version)
             log.info("mihomo ready version=\(version, privacy: .public)")
+            await configStore.refresh(api: client)
             startStreams(stream)
         } catch {
             log.error("kernel start failed: \(String(describing: error), privacy: .public)")
@@ -226,6 +230,7 @@ final class KernelController {
         streamTasks = []
         trafficStore.reset()
         connectionsStore.reset()
+        configStore.reset()
     }
 
     private func startStreams(_ stream: MihomoStreamClient) {

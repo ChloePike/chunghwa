@@ -17,6 +17,8 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.proxyStore)
                 .environment(appDelegate.trafficStore)
                 .environment(appDelegate.connectionsStore)
+                .environment(appDelegate.configStore)
+                .environment(appDelegate.anonymousMode)
         }
 
         MenuBarExtra {
@@ -41,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let proxyStore: ProxyStore
     let trafficStore: TrafficStore
     let connectionsStore: ConnectionsStore
+    let configStore: ConfigStore
+    let anonymousMode: AnonymousMode
     let kernel: KernelController
 
     override init() {
@@ -51,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let proxyStore = ProxyStore()
         let trafficStore = TrafficStore()
         let connectionsStore = ConnectionsStore()
+        let configStore = ConfigStore()
+        let anonymousMode = AnonymousMode()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
         self.logStore = logStore
@@ -59,12 +65,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.proxyStore = proxyStore
         self.trafficStore = trafficStore
         self.connectionsStore = connectionsStore
+        self.configStore = configStore
+        self.anonymousMode = anonymousMode
         self.kernel = KernelController(
             resolver: resolver,
             logStore: logStore,
             profileStore: profileStore,
             trafficStore: trafficStore,
-            connectionsStore: connectionsStore
+            connectionsStore: connectionsStore,
+            configStore: configStore
         )
         super.init()
     }

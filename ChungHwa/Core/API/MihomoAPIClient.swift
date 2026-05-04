@@ -28,6 +28,10 @@ private nonisolated struct SelectProxyBody: Encodable, Sendable {
     let name: String
 }
 
+private nonisolated struct PatchConfigBody: Encodable, Sendable {
+    let mode: String
+}
+
 actor MihomoAPIClient {
     let baseURL: URL
     private let secret: String
@@ -58,6 +62,15 @@ actor MihomoAPIClient {
 
     func proxies() async throws -> MihomoProxiesSnapshot {
         try await sendDecoding("/proxies", method: "GET")
+    }
+
+    func config() async throws -> MihomoConfig {
+        try await sendDecoding("/configs", method: "GET")
+    }
+
+    /// Switch outbound mode. `mode` must be `rule`, `global`, or `direct`.
+    func setMode(_ mode: MihomoMode) async throws {
+        try await sendVoid("/configs", method: "PATCH", body: PatchConfigBody(mode: mode.rawValue))
     }
 
     /// Switch the upstream choice of a Selector group.
