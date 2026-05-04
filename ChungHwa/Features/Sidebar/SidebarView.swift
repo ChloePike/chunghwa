@@ -8,7 +8,10 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 0) {
                 BrandHeader()
                     .padding(.horizontal, 14)
-                    .padding(.top, 8)
+                    // Leave room above the wordmark for macOS's traffic
+                    // light buttons (window has hiddenTitleBar so buttons
+                    // overlay the content).
+                    .padding(.top, 30)
                     .padding(.bottom, 6)
 
                 ForEach(SidebarTab.sections) { section in

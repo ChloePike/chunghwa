@@ -25,6 +25,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.loginItem)
                 .environment(appDelegate.notificationCenterStore)
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             ChungHwaCommands()
         }
