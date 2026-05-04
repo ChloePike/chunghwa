@@ -24,22 +24,10 @@ struct ContentView: View {
     @State private var selection: SidebarTab? = .overview
     @State private var errorBus = BannerBus()
 
-    @Environment(ConfigStore.self) private var configStore
-    @Environment(ProxyStore.self) private var proxyStore
-    @Environment(RuleStore.self) private var ruleStore
-    @Environment(NotificationCenterStore.self) private var notifications
-    @Environment(ProfileStore.self) private var profileStore
     @Environment(KernelController.self) private var kernelController
     @Environment(LogStore.self) private var logStore
-    @Environment(SystemProxyController.self) private var systemProxy
-
-    @AppStorage("ChungHwa.OnboardingDismissed") private var onboardingDismissed: Bool = false
 
     private var currentTab: SidebarTab { selection ?? .overview }
-
-    private var showOnboarding: Bool {
-        profileStore.profiles.isEmpty && !onboardingDismissed
-    }
 
     var body: some View {
         NavigationSplitView {
@@ -50,18 +38,14 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 AppToolbar(title: title, onSwitchToProfiles: { selection = .profiles })
                 Banner(bus: errorBus)
-                if showOnboarding {
-                    OnboardingBanner(
-                        onCreate: { selection = .profiles },
-                        onDismiss: { onboardingDismissed = true }
-                    )
-                }
+                OnboardingHost(onCreate: { selection = .profiles })
                 detailScreen
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 StatusBar()
             }
             .ignoresSafeArea(.container, edges: .top)
         }
+        .background(BannerEventBridge(bus: errorBus))
         .toolbarBackground(.hidden, for: .windowToolbar)
         .frame(minWidth: 900, minHeight: 600)
         .task {
@@ -76,33 +60,6 @@ struct ContentView: View {
         .focusedSceneValue(\.sidebarSelection, $selection)
         .focusedSceneValue(\.kernelController, kernelController)
         .focusedSceneValue(\.logStore, logStore)
-        .onChange(of: configStore.lastError) { _, m in
-            errorBus.error(source: "Config", message: m)
-            notifications.post(source: "Config", level: .error, message: m)
-        }
-        .onChange(of: proxyStore.lastError) { _, m in
-            errorBus.error(source: "Proxy", message: m)
-            notifications.post(source: "Proxy", level: .error, message: m)
-        }
-        .onChange(of: ruleStore.lastError) { _, m in
-            errorBus.error(source: "Rule", message: m)
-            notifications.post(source: "Rule", level: .error, message: m)
-        }
-        .onChange(of: profileStore.lastError) { _, m in
-            errorBus.error(source: "Profile", message: m)
-            notifications.post(source: "Profile", level: .error, message: m)
-        }
-        .onChange(of: configStore.mode) { old, new in
-            guard let old, let new, old != new else { return }
-            let msg = "Mode → \(new.displayName)"
-            errorBus.info(source: "Config", message: msg)
-            notifications.post(source: "Config", level: .info, message: msg)
-        }
-        .onChange(of: systemProxy.enabled) { _, new in
-            let msg = new ? "System proxy on" : "System proxy off"
-            errorBus.info(source: "System Proxy", message: msg)
-            notifications.post(source: "System Proxy", level: .info, message: msg)
-        }
     }
 
     private var title: String {
@@ -124,6 +81,75 @@ struct ContentView: View {
         case .profiles:     ProfilesView()
         case .advanced:     AdvancedView()
         case .settings:     SettingsView()
+        }
+    }
+}
+
+/// Hidden zero-size view that owns the `.onChange` subscriptions for
+/// store `lastError` / mode / system-proxy toggles. Isolating these into
+/// their own view keeps `ContentView`'s body dependency set small so the
+/// main layout doesn't re-evaluate on every store mutation.
+private struct BannerEventBridge: View {
+    let bus: BannerBus
+
+    @Environment(NotificationCenterStore.self) private var notifications
+    @Environment(ConfigStore.self) private var configStore
+    @Environment(ProxyStore.self) private var proxyStore
+    @Environment(RuleStore.self) private var ruleStore
+    @Environment(ProfileStore.self) private var profileStore
+    @Environment(SystemProxyController.self) private var systemProxy
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onChange(of: configStore.lastError) { _, m in
+                bus.error(source: "Config", message: m)
+                notifications.post(source: "Config", level: .error, message: m)
+            }
+            .onChange(of: proxyStore.lastError) { _, m in
+                bus.error(source: "Proxy", message: m)
+                notifications.post(source: "Proxy", level: .error, message: m)
+            }
+            .onChange(of: ruleStore.lastError) { _, m in
+                bus.error(source: "Rule", message: m)
+                notifications.post(source: "Rule", level: .error, message: m)
+            }
+            .onChange(of: profileStore.lastError) { _, m in
+                bus.error(source: "Profile", message: m)
+                notifications.post(source: "Profile", level: .error, message: m)
+            }
+            .onChange(of: configStore.mode) { old, new in
+                guard let old, let new, old != new else { return }
+                let msg = "Mode → \(new.displayName)"
+                bus.info(source: "Config", message: msg)
+                notifications.post(source: "Config", level: .info, message: msg)
+            }
+            .onChange(of: systemProxy.enabled) { _, new in
+                let msg = new ? "System proxy on" : "System proxy off"
+                bus.info(source: "System Proxy", message: msg)
+                notifications.post(source: "System Proxy", level: .info, message: msg)
+            }
+    }
+}
+
+/// Owns the profile-store read + onboarding-dismissed @AppStorage so
+/// ContentView itself doesn't subscribe to ProfileStore mutations.
+private struct OnboardingHost: View {
+    let onCreate: () -> Void
+
+    @Environment(ProfileStore.self) private var profileStore
+    @AppStorage("ChungHwa.OnboardingDismissed") private var onboardingDismissed: Bool = false
+
+    private var showOnboarding: Bool {
+        profileStore.profiles.isEmpty && !onboardingDismissed
+    }
+
+    var body: some View {
+        if showOnboarding {
+            OnboardingBanner(
+                onCreate: onCreate,
+                onDismiss: { onboardingDismissed = true }
+            )
         }
     }
 }
