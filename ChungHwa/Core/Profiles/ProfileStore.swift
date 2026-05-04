@@ -84,7 +84,15 @@ final class ProfileStore {
             self.autoRefreshHours = max(0, stored)
         }
 
+        let metadataExisted = FileManager.default.fileExists(atPath: metadataURL.path)
         load()
+        // First launch (no metadata file yet, profiles list empty) — drop in
+        // a working "rule + direct" yaml so the kernel can boot without the
+        // user importing anything. They can replace / delete it like any
+        // other profile.
+        if !metadataExisted && profiles.isEmpty {
+            try? installDefaultProfile()
+        }
         startAutoRefreshLoop()
     }
 
@@ -325,6 +333,60 @@ final class ProfileStore {
         storageMode = mode
         try save()
     }
+
+    // MARK: - default profile
+
+    private func installDefaultProfile() throws {
+        let id = UUID()
+        guard let yaml = Self.defaultProfileYAML.data(using: .utf8) else { return }
+        try writeYaml(yaml, for: id)
+        let now = Date()
+        let p = Profile(id: id, name: "默认配置", source: .file, importedAt: now, updatedAt: now)
+        profiles.append(p)
+        activeProfileID = id
+        try save()
+        log.info("installed default profile id=\(id.uuidString, privacy: .public)")
+    }
+
+    /// Minimal config — rule mode + DIRECT-only so the kernel boots and the
+    /// LAN works without any subscription. The user replaces this by adding
+    /// their own profile (file or URL).
+    private static let defaultProfileYAML: String = """
+    # ChungHwa 默认配置 — 你导入订阅前 mihomo 用这套兜底
+    mode: rule
+    log-level: info
+    allow-lan: false
+    ipv6: false
+
+    dns:
+      enable: true
+      enhanced-mode: fake-ip
+      fake-ip-range: 198.18.0.1/16
+      nameserver:
+        - https://cloudflare-dns.com/dns-query
+        - https://dns.google/dns-query
+      fallback:
+        - tls://1.1.1.1:853
+        - tls://8.8.8.8:853
+
+    proxies: []
+
+    proxy-groups:
+      - name: PROXY
+        type: select
+        proxies:
+          - DIRECT
+          - REJECT
+
+    rules:
+      - DOMAIN-SUFFIX,local,DIRECT
+      - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+      - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+      - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+      - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+      - GEOIP,LAN,DIRECT,no-resolve
+      - MATCH,DIRECT
+    """
 
     // MARK: - persistence
 

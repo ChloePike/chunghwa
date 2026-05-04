@@ -61,12 +61,8 @@ struct SettingsView: View {
                     Text("macOS 上的 mihomo 客户端")
                         .font(.system(size: 11.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
-                    HStack(spacing: 10) {
-                        aboutMetaPill(label: "应用", value: "v\(Self.shortVersion) (\(Self.buildVersion))")
-                        aboutMetaPill(label: "内核", value: kernelDisplayVersion)
-                        aboutMetaPill(label: "系统", value: "macOS \(ProcessInfo.processInfo.operatingSystemVersion.majorVersion).\(ProcessInfo.processInfo.operatingSystemVersion.minorVersion)")
-                    }
-                    .padding(.top, 4)
+                    aboutMetaPill(label: "内核", value: kernelDisplayVersion)
+                        .padding(.top, 4)
                 }
 
                 Spacer(minLength: 0)
@@ -666,6 +662,8 @@ private struct BrassButton: View {
     var systemImage: String?
     let action: () -> Void
 
+    @Environment(\.isEnabled) private var isEnabled
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
@@ -674,22 +672,28 @@ private struct BrassButton: View {
                 }
                 Text(title).font(.system(size: 11.5, weight: .semibold))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(isEnabled ? Color.white : ChungHwa.Palette.faint)
             .padding(.horizontal, 12)
             .frame(height: 26)
-            .background(
-                LinearGradient(colors: [ChungHwa.Palette.brass,
-                                        ChungHwa.Palette.brassDark],
-                               startPoint: .top, endPoint: .bottom),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
+            .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
+                    .strokeBorder(isEnabled ? Color.white.opacity(0.18) : ChungHwa.Palette.line,
+                                  lineWidth: 0.5)
             )
-            .shadow(color: ChungHwa.Palette.brass.opacity(0.25), radius: 2, y: 1)
+            .shadow(color: ChungHwa.Palette.brass.opacity(isEnabled ? 0.25 : 0), radius: 2, y: 1)
         }
         .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.12), value: isEnabled)
+    }
+
+    private var backgroundStyle: AnyShapeStyle {
+        if isEnabled {
+            AnyShapeStyle(LinearGradient(colors: [ChungHwa.Palette.brass, ChungHwa.Palette.brassDark],
+                                         startPoint: .top, endPoint: .bottom))
+        } else {
+            AnyShapeStyle(ChungHwa.Palette.fillStrong)
+        }
     }
 }
 

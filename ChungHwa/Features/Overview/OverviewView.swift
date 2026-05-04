@@ -155,7 +155,7 @@ private struct TrafficChart: View {
                     colors: [ChungHwa.Palette.patina.opacity(0.30),
                              ChungHwa.Palette.patina.opacity(0)],
                     startPoint: .top, endPoint: .bottom))
-                .interpolationMethod(.monotone)
+                .interpolationMethod(.linear)
 
                 AreaMark(
                     x: .value("t", p.idx),
@@ -166,17 +166,17 @@ private struct TrafficChart: View {
                     colors: [ChungHwa.Palette.brass.opacity(0.28),
                              ChungHwa.Palette.brass.opacity(0)],
                     startPoint: .top, endPoint: .bottom))
-                .interpolationMethod(.monotone)
+                .interpolationMethod(.linear)
 
                 LineMark(x: .value("t", p.idx), y: .value("up", p.up))
                     .foregroundStyle(ChungHwa.Palette.patina)
                     .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
-                    .interpolationMethod(.monotone)
+                    .interpolationMethod(.linear)
 
                 LineMark(x: .value("t", p.idx), y: .value("down", p.down))
                     .foregroundStyle(ChungHwa.Palette.brass)
                     .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
-                    .interpolationMethod(.monotone)
+                    .interpolationMethod(.linear)
             }
         }
         .chartXAxis(.hidden)
