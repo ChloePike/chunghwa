@@ -11,6 +11,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.kernel)
                 .environment(appDelegate.resolver)
                 .environment(appDelegate.downloader)
+                .environment(appDelegate.logStore)
         }
     }
 }
@@ -19,13 +20,16 @@ struct ChungHwaApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let resolver: KernelBinaryResolver
     let downloader: KernelDownloader
+    let logStore: LogStore
     let kernel: KernelController
 
     override init() {
         let resolver = KernelBinaryResolver()
+        let logStore = LogStore()
         self.resolver = resolver
         self.downloader = KernelDownloader(resolver: resolver)
-        self.kernel = KernelController(resolver: resolver)
+        self.logStore = logStore
+        self.kernel = KernelController(resolver: resolver, logStore: logStore)
         super.init()
     }
 

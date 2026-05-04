@@ -1,0 +1,33 @@
+import SwiftUI
+
+private struct ComingSoon: View {
+    let title: String
+    let symbol: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 48))
+                .foregroundStyle(.tertiary)
+            Text(title).font(.title2.weight(.semibold))
+            Text("Coming in a later milestone.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
+        .navigationTitle(title)
+    }
+}
+
+struct ProxiesView: View {
+    var body: some View { ComingSoon(title: "Proxies", symbol: "globe") }
+}
+
+struct RulesView: View {
+    var body: some View { ComingSoon(title: "Rules", symbol: "list.bullet.rectangle") }
+}
+
+struct ConnectionsView: View {
+    var body: some View { ComingSoon(title: "Connections", symbol: "link") }
+}

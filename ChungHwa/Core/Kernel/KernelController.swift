@@ -34,11 +34,13 @@ final class KernelController {
     private let externalControllerPort = 47913
 
     private let resolver: KernelBinaryResolver
+    private let logStore: LogStore
     private let dataDir: URL
     private let configFile: URL
 
-    init(resolver: KernelBinaryResolver) {
+    init(resolver: KernelBinaryResolver, logStore: LogStore) {
         self.resolver = resolver
+        self.logStore = logStore
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.dataDir = appSupport
@@ -77,8 +79,8 @@ final class KernelController {
             process.standardError = errPipe
             self.stdoutPipe = outPipe
             self.stderrPipe = errPipe
-            attachLog(pipe: outPipe, label: "mihomo.stdout")
-            attachLog(pipe: errPipe, label: "mihomo.stderr")
+            attachLog(pipe: outPipe, label: "mihomo.stdout", stream: .stdout)
+            attachLog(pipe: errPipe, label: "mihomo.stderr", stream: .stderr)
 
             process.terminationHandler = { [weak self] proc in
                 let code = proc.terminationStatus
@@ -176,13 +178,21 @@ final class KernelController {
         throw KernelError.notReady(lastError)
     }
 
-    private func attachLog(pipe: Pipe, label: String) {
+    private func attachLog(pipe: Pipe, label: String, stream: LogStream) {
         let logger = self.log
+        let store = self.logStore
         pipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
-            for line in text.split(separator: "\n") where !line.isEmpty {
-                logger.debug("\(label, privacy: .public): \(String(line), privacy: .public)")
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+            guard !lines.isEmpty else { return }
+            for line in lines {
+                logger.debug("\(label, privacy: .public): \(line, privacy: .public)")
+            }
+            Task { @MainActor in
+                for line in lines {
+                    store.append(line, stream: stream)
+                }
             }
         }
     }
