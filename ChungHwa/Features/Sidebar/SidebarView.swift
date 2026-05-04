@@ -7,11 +7,6 @@ struct SidebarView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                BrandHeader()
-                    .padding(.horizontal, 14)
-                    .padding(.top, 8)
-                    .padding(.bottom, 6)
-
                 ForEach(SidebarTab.sections) { section in
                     if let h = section.header {
                         Text(h)
@@ -37,11 +32,11 @@ struct SidebarView: View {
         }
         .scrollContentBackground(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(SidebarGlass())
+        .background(SidebarGlass().ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             SettingsFooter(selection: $selection)
         }
-        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
+        .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
     }
 }
 
@@ -87,7 +82,9 @@ private struct TabRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 6)
+        // Keep horizontal inset > the window's outer corner radius (≈10pt)
+        // so the pill never slips into the curved corner zone.
+        .padding(.horizontal, 10)
         .padding(.vertical, 1)
         .onHover { hovering = $0 }
     }
@@ -153,7 +150,10 @@ private struct SettingsFooter: View {
             TabRow(tab: .settings,
                    isActive: selection == .settings,
                    select: { selection = .settings })
-                .padding(.vertical, 6)
+                .padding(.top, 6)
+                // Bigger bottom inset so the active pill stays clear of
+                // the window's rounded corner curve.
+                .padding(.bottom, 10)
         }
         .background(SidebarGlass())
     }
