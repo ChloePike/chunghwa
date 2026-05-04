@@ -817,6 +817,14 @@ private struct YAMLInspectorSheet: View {
     /// successful save so the highlighted view shows the new bytes without
     /// having to close & reopen the sheet.
     @State private var displayContent: String?
+    /// Cached highlighted version of `displayContent`. Recomputed off the
+    /// main thread whenever `displayContent` changes; nil while a recompute
+    /// is in flight (we render plain text in the meantime).
+    @State private var highlighted: AttributedString?
+    /// YAML files larger than this skip the AttributedString highlighter
+    /// entirely — past ~100KB the per-line `out.append` path hits an O(N²)
+    /// wall in AttributedString and freezes the main thread.
+    private let highlightCap = 100_000
     /// Brief "Saved." / "Reloading mihomo…" status message shown after a save.
     @State private var saveStatus: String?
 
@@ -835,6 +843,30 @@ private struct YAMLInspectorSheet: View {
         .onAppear {
             displayContent = yaml
             editedContent = yaml ?? ""
+        }
+        .task(id: displayContent ?? "") {
+            await rehighlight()
+        }
+    }
+
+    /// Recompute the syntax-highlighted AttributedString off the main thread
+    /// and cache it. Skipped for files past `highlightCap` (renders as plain
+    /// text instead).
+    private func rehighlight() async {
+        guard let content = displayContent, !content.isEmpty else {
+            highlighted = nil
+            return
+        }
+        if content.utf8.count > highlightCap {
+            highlighted = nil
+            return
+        }
+        let attr = await Task.detached(priority: .userInitiated) {
+            YAMLHighlighter.highlight(content)
+        }.value
+        // Only commit if displayContent didn't change underneath us.
+        if displayContent == content {
+            highlighted = attr
         }
     }
 
@@ -931,12 +963,22 @@ private struct YAMLInspectorSheet: View {
                 .padding(.horizontal, 18)
         } else if let displayContent {
             ScrollView([.vertical, .horizontal]) {
-                Text(YAMLHighlighter.highlight(displayContent))
-                    .textSelection(.enabled)
-                    .font(ChungHwa.Typography.mono(11))
-                    .lineSpacing(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+                Group {
+                    if let highlighted {
+                        Text(highlighted)
+                    } else {
+                        // Either the highlighter is still running, or the
+                        // file's too big for it (highlightCap). Render as
+                        // plain mono text so the sheet stays responsive.
+                        Text(displayContent)
+                            .foregroundStyle(ChungHwa.Palette.text)
+                    }
+                }
+                .textSelection(.enabled)
+                .font(ChungHwa.Typography.mono(11))
+                .lineSpacing(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
             }
             .background(ChungHwa.Palette.cardSoft)
             .overlay(
