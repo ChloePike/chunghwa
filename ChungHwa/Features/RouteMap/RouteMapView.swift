@@ -242,36 +242,27 @@ private struct MapCanvas: View {
                     let size = geo.size
                     let origin = AsiaProjection.project(lat: originLat, lon: originLon, in: size)
 
-                    // 飞机沿弧线
-                    Canvas { gc, _ in
-                        for (i, dest) in destinations.enumerated() {
-                            let p1 = AsiaProjection.project(lat: dest.lat, lon: dest.lon, in: size)
-                            let control = controlPoint(from: origin, to: p1, fanIndex: i, total: destinations.count)
-                            let count = activeIndices.contains(i) ? 3 : 2
-                            for k in 0..<count {
-                                let phaseOffset = Double(k) / Double(count)
-                                var t = (phase + phaseOffset + Double(i) * 0.07).truncatingRemainder(dividingBy: 1.0)
-                                if t < 0 { t += 1 }
-                                let pt = bezierPoint(t: t, p0: origin, c: control, p1: p1)
-                                let tan = bezierTangent(t: t, p0: origin, c: control, p1: p1)
-                                let angle = atan2(tan.dy, tan.dx)
-
-                                // 绘制飞机：用 SF Symbol -> resolved -> 旋转
-                                let resolved = gc.resolveSymbol(id: AirplaneID(index: i, k: k))
-                                if let resolved {
-                                    var transform = gc
-                                    transform.translateBy(x: pt.x, y: pt.y)
-                                    transform.rotate(by: .radians(angle))
-                                    transform.draw(resolved, at: .zero)
-                                }
-                            }
-                        }
-                    } symbols: {
-                        ForEach(0..<destinations.count, id: \.self) { i in
-                            ForEach(0..<3, id: \.self) { k in
-                                airplaneSymbol(color: destinations[i].color, alpha: activeIndices.contains(i) ? 1 : 0.55)
-                                    .tag(AirplaneID(index: i, k: k))
-                            }
+                    // 飞机沿弧线（直接用 Image overlay + .position + rotation
+                    // 替代 Canvas symbols —— Canvas symbols 在嵌套 ForEach 下
+                    // 触发 SwiftUI 内部 assertionFailure，会闪退）。
+                    ForEach(Array(destinations.enumerated()), id: \.offset) { i, dest in
+                        let p1 = AsiaProjection.project(lat: dest.lat, lon: dest.lon, in: size)
+                        let control = controlPoint(from: origin, to: p1, fanIndex: i, total: destinations.count)
+                        let active = activeIndices.contains(i)
+                        let planeCount = active ? 3 : 2
+                        let alpha: Double = active ? 1 : 0.55
+                        ForEach(0..<planeCount, id: \.self) { k in
+                            let phaseOffset = Double(k) / Double(planeCount)
+                            let raw = phase + phaseOffset + Double(i) * 0.07
+                            let t = raw - Foundation.floor(raw)
+                            let pt = bezierPoint(t: t, p0: origin, c: control, p1: p1)
+                            let tan = bezierTangent(t: t, p0: origin, c: control, p1: p1)
+                            let angle = atan2(tan.dy, tan.dx)
+                            Image(systemName: "airplane")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(dest.color.opacity(alpha))
+                                .rotationEffect(.radians(angle))
+                                .position(pt)
                         }
                     }
 
@@ -355,12 +346,6 @@ private struct MapCanvas: View {
         return CGVector(dx: dx, dy: dy)
     }
 
-    private func airplaneSymbol(color: Color, alpha: Double) -> some View {
-        Image(systemName: "airplane")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(color.opacity(alpha))
-            .shadow(color: ChungHwa.Palette.bg.opacity(0.6), radius: 0.5)
-    }
 
     private var legend: some View {
         let groups = Dictionary(grouping: destinations, by: { $0.group })
@@ -441,13 +426,6 @@ private struct MapCanvas: View {
             lat += 10.0
         }
     }
-}
-
-// MARK: - Airplane symbol id
-
-private struct AirplaneID: Hashable {
-    let index: Int
-    let k: Int
 }
 
 // MARK: - Mock destinations
