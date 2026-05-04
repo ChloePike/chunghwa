@@ -8,12 +8,18 @@ struct ContentView: View {
             SidebarView(selection: $selection)
         } detail: {
             switch selection ?? .overview {
-            case .overview:    OverviewView()
-            case .proxies:     ProxiesView()
-            case .rules:       RulesView()
-            case .connections: ConnectionsView()
-            case .logs:        LogsView()
-            case .settings:    SettingsView()
+            case .overview:     OverviewView()
+            case .trafficStats: TrafficStatsView()
+            case .connections:  ConnectionsView()
+            case .logs:         LogsView()
+            case .topology:     TopologyView()
+            case .routeMap:     RouteMapView()
+            case .proxies:      ProxiesView()
+            case .rules:        RulesView()
+            case .providers:    ProvidersView()
+            case .profiles:     ProfilesView()
+            case .advanced:     AdvancedView()
+            case .settings:     SettingsView()
             }
         }
         .frame(minWidth: 900, minHeight: 600)
