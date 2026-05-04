@@ -144,24 +144,35 @@ extension ChSubStat where Value == Text {
 
 /// Status dot with optional pulse. Pulse animates opacity, not size, so it
 /// works inline with text without disturbing line height.
+///
+/// The pulse is driven by `TimelineView(.animation)`, which SwiftUI pauses
+/// automatically when the view is off-screen or its scene is inactive — so
+/// dots in hidden tabs don't burn CPU.
 struct ChDot: View {
     var color: Color = ChungHwa.Palette.patina
     var size: CGFloat = 6
     var pulse: Bool = false
 
-    @State private var animating = false
-
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: size, height: size)
-            .overlay(Circle().stroke(color.opacity(0.25), lineWidth: size / 2))
-            .opacity(animating ? 0.4 : 1)
-            .animation(pulse
-                       ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
-                       : .default,
-                       value: animating)
-            .onAppear { if pulse { animating = true } }
+        if pulse {
+            TimelineView(.animation(minimumInterval: 0.08, paused: false)) { ctx in
+                Circle()
+                    .fill(color)
+                    .frame(width: size, height: size)
+                    .overlay(Circle().stroke(color.opacity(0.25), lineWidth: size / 2))
+                    .opacity(opacity(at: ctx.date))
+            }
+        } else {
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+                .overlay(Circle().stroke(color.opacity(0.25), lineWidth: size / 2))
+        }
+    }
+
+    private func opacity(at date: Date) -> Double {
+        let t = date.timeIntervalSinceReferenceDate
+        return 0.7 + 0.3 * (cos(t * 2 * .pi / 1.6) * 0.5 + 0.5)
     }
 }
 
