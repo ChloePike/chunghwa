@@ -32,21 +32,20 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             SidebarView(selection: $selection)
-                .ignoresSafeArea(.container, edges: .top)
-                .toolbar(removing: .sidebarToggle)
         } detail: {
             VStack(spacing: 0) {
-                AppToolbar(title: title, onSwitchToProfiles: { selection = .profiles })
                 Banner(bus: errorBus)
                 OnboardingHost(onCreate: { selection = .profiles })
                 detailScreen
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 StatusBar()
             }
-            .ignoresSafeArea(.container, edges: .top)
+        }
+        .toolbar {
+            ChungHwaToolbar(title: title,
+                            onSwitchToProfiles: { selection = .profiles })
         }
         .background(BannerEventBridge(bus: errorBus))
-        .toolbarBackground(.hidden, for: .windowToolbar)
         .frame(minWidth: 900, minHeight: 600)
         .task {
             // Hydrate the @State selection from the persisted raw on first
@@ -97,9 +96,11 @@ private struct BannerEventBridge: View {
     @Environment(ProxyStore.self) private var proxyStore
     @Environment(RuleStore.self) private var ruleStore
     @Environment(ProfileStore.self) private var profileStore
-    @Environment(SystemProxyController.self) private var systemProxy
 
     var body: some View {
+        // Only error-level events post to bus + notifications. Mode-switch
+        // and system-proxy toggles are user-initiated and don't need a
+        // toast / notification of their own.
         Color.clear
             .frame(width: 0, height: 0)
             .onChange(of: configStore.lastError) { _, m in
@@ -117,17 +118,6 @@ private struct BannerEventBridge: View {
             .onChange(of: profileStore.lastError) { _, m in
                 bus.error(source: "Profile", message: m)
                 notifications.post(source: "Profile", level: .error, message: m)
-            }
-            .onChange(of: configStore.mode) { old, new in
-                guard let old, let new, old != new else { return }
-                let msg = "Mode → \(new.displayName)"
-                bus.info(source: "Config", message: msg)
-                notifications.post(source: "Config", level: .info, message: msg)
-            }
-            .onChange(of: systemProxy.enabled) { _, new in
-                let msg = new ? "System proxy on" : "System proxy off"
-                bus.info(source: "System Proxy", message: msg)
-                notifications.post(source: "System Proxy", level: .info, message: msg)
             }
     }
 }

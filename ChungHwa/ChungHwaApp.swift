@@ -25,7 +25,6 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.loginItem)
                 .environment(appDelegate.notificationCenterStore)
         }
-        .windowStyle(.hiddenTitleBar)
         .commands {
             ChungHwaCommands()
         }
@@ -112,26 +111,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await kernel.start() }
         let hide = UserDefaults.standard.bool(forKey: "ChungHwa.HideDockIcon")
         NSApp.setActivationPolicy(hide ? .accessory : .regular)
-
-        // Match ClashMac-style window chrome: title bar transparent +
-        // .fullSizeContentView so our content extends behind the (still
-        // present) title bar, traffic lights overlay the sidebar's top.
-        // Mask the contentView with a continuous corner radius so the
-        // window stays rounded even when we hide the toolbar background.
-        DispatchQueue.main.async {
-            for window in NSApp.windows {
-                window.titlebarAppearsTransparent = true
-                window.titleVisibility = .hidden
-                window.styleMask.insert(.fullSizeContentView)
-                window.isMovableByWindowBackground = true
-                if let cv = window.contentView {
-                    cv.wantsLayer = true
-                    cv.layer?.cornerRadius = 10
-                    cv.layer?.cornerCurve = .continuous
-                    cv.layer?.masksToBounds = true
-                }
-            }
-        }
 
         // Initial kernel-update check, delayed so we don't compete with kernel startup.
         Task { @MainActor in

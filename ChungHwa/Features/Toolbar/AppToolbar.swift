@@ -1,17 +1,43 @@
 import SwiftUI
 
-/// Custom top bar that sits above each detail screen, mirroring the design
-/// in `design/src/app.jsx` Toolbar(). It hosts:
-///   - the title (selected sidebar tab, serif)
-///   - mode segmented control (`/configs.mode`)
-///   - active profile pill (read-only for now; full picker comes with the
-///     Profiles tab)
-///   - three toggle chips (System Proxy / TUN / Anonymous)
+/// Native window-toolbar content for ChungHwa. Hosts:
+///   - the title (selected sidebar tab, serif) on the leading side
+///   - reload + bell + profile pill + mode segmented + chip cluster on the
+///     trailing side
 ///
-/// The window's native title bar still draws the traffic lights and the
-/// sidebar collapse, so we don't reproduce those here.
-struct AppToolbar: View {
+/// On macOS 26 Tahoe the Liquid Glass title bar fuses traffic lights with
+/// these toolbar items in a single row, so we no longer reproduce a custom
+/// 48pt bar inside the detail VStack.
+struct ChungHwaToolbar: ToolbarContent {
     let title: String
+    var onSwitchToProfiles: (() -> Void)? = nil
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            ToolbarTitle(title: title)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            ToolbarTrailing(onSwitchToProfiles: onSwitchToProfiles)
+        }
+    }
+}
+
+// MARK: - title
+
+private struct ToolbarTitle: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(ChungHwa.Typography.serif(18, weight: .medium))
+            .foregroundStyle(ChungHwa.Palette.text)
+            .tracking(-0.2)
+    }
+}
+
+// MARK: - trailing cluster
+
+private struct ToolbarTrailing: View {
     var onSwitchToProfiles: (() -> Void)? = nil
 
     @Environment(KernelController.self) private var kernel
@@ -24,27 +50,12 @@ struct AppToolbar: View {
     @State private var notificationsOpen = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(ChungHwa.Typography.serif(18, weight: .medium))
-                .foregroundStyle(ChungHwa.Palette.text)
-                .tracking(-0.2)
-
-            Spacer()
-
+        HStack(spacing: 8) {
             reloadButton
             bellButton
             profilePill
             modeSegmented
             chipCluster
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 48)
-        .background(ChungHwa.Palette.bg)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ChungHwa.Palette.line)
-                .frame(height: 0.5)
         }
     }
 
@@ -54,7 +65,7 @@ struct AppToolbar: View {
         let kernelReady = kernel.apiClient != nil
         return IconButton(
             symbol: "arrow.clockwise",
-            help: "Reload mihomo config (preserves connections)",
+            help: "重载 mihomo 配置（保留连接）",
             disabled: !kernelReady
         ) {
             Task { await kernel.reload() }
@@ -67,8 +78,8 @@ struct AppToolbar: View {
         return IconButton(
             symbol: symbol,
             help: unread > 0
-                ? "Notifications · \(unread) new"
-                : "Notifications",
+                ? "通知 · \(unread) 条新"
+                : "通知",
             tint: unread > 0 ? ChungHwa.Palette.brass : nil
         ) {
             notificationsOpen.toggle()
@@ -115,16 +126,16 @@ struct AppToolbar: View {
         .opacity(kernelReady ? 1 : 0.5)
         .disabled(!kernelReady)
         .help(kernelReady
-              ? "Outbound mode (Direct / Rule / Global)"
-              : "Mode switching requires a running kernel")
+              ? "出站模式（直连 / 规则 / 全局）"
+              : "切换模式需要内核运行中")
     }
 
     private var profilePill: some View {
         let name = profileStore.profiles.first(where: { $0.id == profileStore.activeProfileID })?.name
-            ?? "No profile"
+            ?? "无配置"
         return Menu {
             if profileStore.profiles.isEmpty {
-                Text("No profiles")
+                Text("暂无配置")
             } else {
                 ForEach(profileStore.profiles) { p in
                     Button {
@@ -140,7 +151,7 @@ struct AppToolbar: View {
                 }
             }
             Divider()
-            Button("Manage profiles…") {
+            Button("管理配置…") {
                 onSwitchToProfiles?()
             }
         } label: {
@@ -167,7 +178,7 @@ struct AppToolbar: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Active profile — click to switch")
+        .help("当前配置 — 点击切换")
     }
 
     private var chipCluster: some View {
@@ -176,14 +187,14 @@ struct AppToolbar: View {
                 isOn: systemProxy.enabled,
                 symbol: "network",
                 tint: ChungHwa.Palette.patina,
-                help: "System Proxy · \(systemProxy.enabled ? "ON" : "OFF")",
+                help: "系统代理 · \(systemProxy.enabled ? "已开" : "已关")",
                 action: { systemProxy.toggle() }
             )
             ToggleChip(
                 isOn: false,
                 symbol: "shield.lefthalf.filled",
                 tint: ChungHwa.Palette.brass,
-                help: "TUN Mode · OFF (requires privileged helper, M5+)",
+                help: "TUN 模式 · 已关（需要特权辅助，M5+）",
                 disabled: true,
                 action: {}
             )
@@ -191,7 +202,7 @@ struct AppToolbar: View {
                 isOn: anon.enabled,
                 symbol: anon.enabled ? "eye.slash" : "eye",
                 tint: ChungHwa.Palette.ink,
-                help: "Anonymous Mode · \(anon.enabled ? "ON (info masked)" : "OFF")",
+                help: "匿名模式 · \(anon.enabled ? "已开（信息已隐藏）" : "已关")",
                 action: { anon.enabled.toggle() }
             )
         }
@@ -311,16 +322,16 @@ private struct NotificationsPopover: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text("Notifications")
+            Text("通知")
                 .font(ChungHwa.Typography.serif(14, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.text)
             Spacer(minLength: 6)
-            Button("Mark all read") { store.markAllRead() }
+            Button("全部已读") { store.markAllRead() }
                 .buttonStyle(.plain)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .disabled(store.entries.isEmpty)
-            Button("Clear") { store.clear() }
+            Button("清空") { store.clear() }
                 .buttonStyle(.plain)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.dim)
@@ -335,7 +346,7 @@ private struct NotificationsPopover: View {
         if store.entries.isEmpty {
             VStack {
                 Spacer()
-                Text("No notifications")
+                Text("暂无通知")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.faint)
                 Spacer()
