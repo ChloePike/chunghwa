@@ -47,38 +47,74 @@ struct SettingsView: View {
         ChCardWithHeader("关于",
                          systemImage: "info.circle",
                          iconColor: ChungHwa.Palette.brass) {
-            HStack(alignment: .center, spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(ChungHwa.Palette.brass.opacity(0.16))
-                        .frame(width: 56, height: 56)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(ChungHwa.Palette.brass.opacity(0.35),
-                                              lineWidth: 0.5)
-                        )
-                    Image(systemName: "shield.lefthalf.filled")
-                        .font(.system(size: 26, weight: .regular))
-                        .foregroundStyle(ChungHwa.Palette.brass)
-                }
+            HStack(alignment: .center, spacing: 16) {
+                Image(nsImage: NSApp.applicationIconImage ?? NSImage())
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 72, height: 72)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("中華")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("中華 · ChungHwa")
                         .font(ChungHwa.Typography.serif(22, weight: .semibold))
                         .foregroundStyle(ChungHwa.Palette.text)
                         .tracking(-0.4)
-                    Text("macOS 上的 mihomo 客户端 · v\(Self.shortVersion)+\(Self.buildVersion)")
+                    Text("macOS 上的 mihomo 客户端")
                         .font(.system(size: 11.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
-                        .textSelection(.enabled)
+                    HStack(spacing: 10) {
+                        aboutMetaPill(label: "应用", value: "v\(Self.shortVersion) (\(Self.buildVersion))")
+                        aboutMetaPill(label: "内核", value: kernelDisplayVersion)
+                        aboutMetaPill(label: "系统", value: "macOS \(ProcessInfo.processInfo.operatingSystemVersion.majorVersion).\(ProcessInfo.processInfo.operatingSystemVersion.minorVersion)")
+                    }
+                    .padding(.top, 4)
                 }
 
                 Spacer(minLength: 0)
+
+                VStack(spacing: 6) {
+                    BrassButton(title: "GitHub", systemImage: "arrow.up.right.square") {
+                        if let url = URL(string: "https://github.com/ChloePike/chunghwa") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    Button("复制版本信息") {
+                        let info = "ChungHwa v\(Self.shortVersion) (\(Self.buildVersion)) · mihomo \(kernelDisplayVersion) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(info, forType: .string)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+                }
             }
             .padding(.horizontal, 14)
-            .padding(.top, 4)
-            .padding(.bottom, 6)
+            .padding(.top, 6)
+            .padding(.bottom, 12)
         }
+    }
+
+    private var kernelDisplayVersion: String {
+        if case let .running(v) = kernel.status { return v }
+        return "—"
+    }
+
+    private func aboutMetaPill(label: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(ChungHwa.Palette.faint)
+            Text(value)
+                .font(ChungHwa.Typography.mono(10.5, weight: .semibold))
+                .foregroundStyle(ChungHwa.Palette.text)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, 7)
+        .frame(height: 20)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(ChungHwa.Palette.fill)
+                .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
+        )
     }
 
     private static var shortVersion: String {
@@ -175,16 +211,11 @@ struct SettingsView: View {
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                         .disabled(applyingPort)
-                    Button {
+                    BrassButton(title: applyingPort ? "应用中…" : "应用",
+                                systemImage: "arrow.triangle.2.circlepath") {
                         Task { await applyPort() }
-                    } label: {
-                        Text(applyingPort ? "应用中…" : "应用")
-                            .font(.system(size: 11.5, weight: .medium))
-                            .padding(.horizontal, 10)
-                            .frame(height: 24)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .opacity((portIsValid && !portMatchesPersisted && !applyingPort) ? 1 : 0.45)
                     .disabled(!portIsValid || portMatchesPersisted || applyingPort)
                 }
 

@@ -1,0 +1,26 @@
+{
+  "images" : [
+    {
+      "filename" : "MenubarIcon.png",
+      "idiom" : "mac",
+      "scale" : "1x"
+    },
+    {
+      "filename" : "MenubarIcon@2x.png",
+      "idiom" : "mac",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "MenubarIcon@3x.png",
+      "idiom" : "mac",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-representation" : false
+  }
+}

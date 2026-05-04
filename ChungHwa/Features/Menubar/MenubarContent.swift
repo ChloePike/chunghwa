@@ -548,9 +548,14 @@ struct MenubarLabel: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: MenubarIconName.current(
-                kernel: kernel,
-                systemProxy: systemProxy))
+            // Custom-branded raster icon (rendered as-is with full color so
+            // the red+gold 中華 mark stays recognizable). Slight desaturation
+            // when offline so the user gets state at a glance.
+            Image("MenubarIcon")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 16, height: 16)
+                .opacity(kernel.apiClient == nil ? 0.45 : 1.0)
             if kernel.apiClient != nil {
                 Text("↑\(short(traffic.current?.upBps ?? 0)) ↓\(short(traffic.current?.downBps ?? 0))")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
