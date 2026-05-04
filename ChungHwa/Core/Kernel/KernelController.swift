@@ -43,6 +43,7 @@ final class KernelController {
     private let logStore: LogStore
     private let profileStore: ProfileStore
     private let trafficStore: TrafficStore
+    private let historyStore: TrafficHistoryStore
     private let connectionsStore: ConnectionsStore
     private let configStore: ConfigStore
     private let dataDir: URL
@@ -52,12 +53,14 @@ final class KernelController {
          logStore: LogStore,
          profileStore: ProfileStore,
          trafficStore: TrafficStore,
+         historyStore: TrafficHistoryStore,
          connectionsStore: ConnectionsStore,
          configStore: ConfigStore) {
         self.resolver = resolver
         self.logStore = logStore
         self.profileStore = profileStore
         self.trafficStore = trafficStore
+        self.historyStore = historyStore
         self.connectionsStore = connectionsStore
         self.configStore = configStore
         let appSupport = FileManager.default
@@ -266,9 +269,11 @@ final class KernelController {
 
     private func startTrafficStream(_ stream: MihomoStreamClient) -> Task<Void, Never> {
         let store = self.trafficStore
+        let history = self.historyStore
         return Task {
             for await sample in await stream.trafficEvents() {
                 store.append(sample)
+                history.feed(sample)
             }
         }
     }

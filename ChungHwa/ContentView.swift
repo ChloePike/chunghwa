@@ -44,6 +44,7 @@ struct ContentView: View {
     let logStore = LogStore()
     let profileStore = ProfileStore()
     let trafficStore = TrafficStore()
+    let historyStore = TrafficHistoryStore()
     let connectionsStore = ConnectionsStore()
     let configStore = ConfigStore()
     let ruleStore = RuleStore()
@@ -53,6 +54,7 @@ struct ContentView: View {
             logStore: logStore,
             profileStore: profileStore,
             trafficStore: trafficStore,
+            historyStore: historyStore,
             connectionsStore: connectionsStore,
             configStore: configStore))
         .environment(resolver)
@@ -62,6 +64,7 @@ struct ContentView: View {
         .environment(SystemProxyController())
         .environment(ProxyStore())
         .environment(trafficStore)
+        .environment(historyStore)
         .environment(connectionsStore)
         .environment(configStore)
         .environment(ruleStore)

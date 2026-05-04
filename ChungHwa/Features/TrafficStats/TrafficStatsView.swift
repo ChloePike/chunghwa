@@ -1,17 +1,18 @@
 import Charts
 import SwiftUI
 
-/// Bone & Brass Traffic Stats surface. The Live card reflects real data
-/// streamed via `TrafficStore`; the By-Hour and By-Process cards are
-/// synthetic placeholders until persistent multi-day storage lands. Mirrors
+/// Bone & Brass Traffic Stats surface. The Live and By-Hour cards reflect
+/// real data (streamed via `TrafficStore` for live, persisted via
+/// `TrafficHistoryStore` for the 24h view); By-Process is still a synthetic
+/// placeholder because we don't have per-process attribution yet. Mirrors
 /// the layout of the design's stats screen — see `design/src/app.jsx`.
 struct TrafficStatsView: View {
     @Environment(TrafficStore.self) private var traffic
+    @Environment(TrafficHistoryStore.self) private var history
     @Environment(KernelController.self) private var kernel
 
-    /// Deterministic mock series (computed once per view life) so bars don't
-    /// reshuffle on every render.
-    private let hourBars: [Double] = makeHourBars(seed: 42)
+    /// Deterministic mock rows (computed once per view life) so values don't
+    /// reshuffle on every render. Used only by the By-Process card.
     private let processRows: [ProcessRow] = makeProcessRows()
 
     var body: some View {
@@ -146,11 +147,11 @@ struct TrafficStatsView: View {
             .padding(.horizontal, 2)
     }
 
-    // MARK: - By Hour (mock)
+    // MARK: - By Hour (real)
 
     private var byHourCard: some View {
         ChCardWithHeader(
-            "By Hour",
+            "Download by hour",
             systemImage: "clock",
             iconColor: ChungHwa.Palette.patina,
             right: {
@@ -186,23 +187,24 @@ struct TrafficStatsView: View {
                 }
                 .font(.system(size: 11))
                 .monospacedDigit()
-
-                demoNote
             }
         }
     }
 
     private var hourChart: some View {
-        let currentHour = Calendar.current.component(.hour, from: Date())
+        let cal = Calendar.current
+        let currentHour = cal.component(.hour, from: Date())
+        let buckets = history.hourly
         return Chart {
-            ForEach(Array(hourBars.enumerated()), id: \.offset) { idx, v in
+            ForEach(buckets) { bucket in
+                let hour = cal.component(.hour, from: bucket.hourStart)
                 BarMark(
-                    x: .value("hour", idx),
-                    y: .value("mb", v),
+                    x: .value("hour", hour),
+                    y: .value("bytes", bucket.downBytes),
                     width: .ratio(0.62)
                 )
                 .foregroundStyle(
-                    idx == currentHour
+                    hour == currentHour
                         ? ChungHwa.Palette.brass
                         : ChungHwa.Palette.brass.opacity(0.85)
                 )
@@ -374,13 +376,15 @@ struct TrafficStatsView: View {
     }
 
     private var dailyAverageString: String {
-        let total = hourBars.reduce(0, +)
-        let avg = total / Double(max(hourBars.count, 1))
-        return formatMB(avg)
+        // Sum across all 24 buckets and divide by 24, regardless of how many
+        // hours actually have data — gives a stable "per-hour average over
+        // last 24h" reading consistent with the bar chart.
+        let total = history.hourly.map(\.downBytes).reduce(0, +)
+        return ChFormat.bytes(total / 24)
     }
 
     private var hourlyPeakString: String {
-        formatMB(hourBars.max() ?? 0)
+        ChFormat.bytes(history.hourly.map(\.downBytes).max() ?? 0)
     }
 }
 
@@ -410,26 +414,3 @@ private func makeProcessRows() -> [ProcessRow] {
     }
 }
 
-/// Mulberry32 PRNG seeded by `seed` so the bar heights are stable across
-/// view rebuilds — same shape every render.
-private func makeHourBars(seed: UInt32) -> [Double] {
-    var state: UInt32 = seed
-    func next() -> Double {
-        state &+= 0x6D2B79F5
-        var z: UInt32 = state
-        z = (z ^ (z >> 15)) &* (z | 1)
-        z = z &+ ((z ^ (z >> 7)) &* (z | 61))
-        z = z ^ (z >> 14)
-        return Double(z) / Double(UInt32.max)
-    }
-
-    return (0..<24).map { i in
-        // Daily curve: low overnight, peak around midday + early evening.
-        let phase = Double(i) / 24.0 * 2 * .pi
-        let curve = 0.55 + 0.45 * sin(phase - .pi / 2)
-        let evening = 0.25 * exp(-pow(Double(i) - 20, 2) / 8)
-        let noise = (next() - 0.5) * 0.25
-        let raw = max(0.05, curve + evening + noise)
-        return raw * 220 // scaled to MB
-    }
-}

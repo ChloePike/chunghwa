@@ -16,6 +16,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.systemProxy)
                 .environment(appDelegate.proxyStore)
                 .environment(appDelegate.trafficStore)
+                .environment(appDelegate.historyStore)
                 .environment(appDelegate.connectionsStore)
                 .environment(appDelegate.configStore)
                 .environment(appDelegate.ruleStore)
@@ -29,6 +30,7 @@ struct ChungHwaApp: App {
                 .environment(appDelegate.configStore)
                 .environment(appDelegate.profileStore)
                 .environment(appDelegate.trafficStore)
+                .environment(appDelegate.historyStore)
                 .environment(appDelegate.connectionsStore)
         } label: {
             Image(systemName: MenubarIconName.current(
@@ -47,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let systemProxy: SystemProxyController
     let proxyStore: ProxyStore
     let trafficStore: TrafficStore
+    let historyStore: TrafficHistoryStore
     let connectionsStore: ConnectionsStore
     let configStore: ConfigStore
     let ruleStore: RuleStore
@@ -60,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let systemProxy = SystemProxyController()
         let proxyStore = ProxyStore()
         let trafficStore = TrafficStore()
+        let historyStore = TrafficHistoryStore()
         let connectionsStore = ConnectionsStore()
         let configStore = ConfigStore()
         let ruleStore = RuleStore()
@@ -71,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.systemProxy = systemProxy
         self.proxyStore = proxyStore
         self.trafficStore = trafficStore
+        self.historyStore = historyStore
         self.connectionsStore = connectionsStore
         self.configStore = configStore
         self.ruleStore = ruleStore
@@ -80,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logStore: logStore,
             profileStore: profileStore,
             trafficStore: trafficStore,
+            historyStore: historyStore,
             connectionsStore: connectionsStore,
             configStore: configStore
         )
