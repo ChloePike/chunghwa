@@ -14,11 +14,14 @@ struct SettingsView: View {
     @AppStorage("ChungHwa.CloseKeepsRunning") private var closeKeepsRunning: Bool = true
     @AppStorage("ChungHwa.HideDockIcon") private var hideDockIcon: Bool = false
 
+    @State private var localChecking: Bool = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 aboutCard
                 startupCard
+                updatesCard
                 kernelBinaryCard
                 resetCard
                 Color.clear.frame(height: 12)
@@ -137,6 +140,131 @@ struct SettingsView: View {
             .padding(.top, 2)
             .padding(.bottom, 4)
         }
+    }
+
+    // MARK: - Updates
+
+    private var updatesCard: some View {
+        ChCardWithHeader("Updates",
+                         systemImage: "arrow.down.circle",
+                         iconColor: ChungHwa.Palette.patina) {
+            VStack(alignment: .leading, spacing: 10) {
+                installedRow
+                latestRow
+                lastCheckedRow
+
+                HStack(spacing: 10) {
+                    BrassButton(title: "Check now", systemImage: "arrow.clockwise") {
+                        Task {
+                            localChecking = true
+                            await downloader.checkForUpdates()
+                            localChecking = false
+                        }
+                    }
+                    .disabled(isChecking)
+                    .opacity(isChecking ? 0.55 : 1)
+
+                    if shouldShowUpdateButton {
+                        GhostButton(title: "Update kernel",
+                                    systemImage: "arrow.down.circle") {
+                            Task {
+                                await downloader.updateLatest()
+                                if case .completed = downloader.state {
+                                    await kernel.restart()
+                                }
+                            }
+                        }
+                        .disabled(downloader.isWorking)
+                        .opacity(downloader.isWorking ? 0.55 : 1)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 2)
+        }
+    }
+
+    private var isChecking: Bool {
+        localChecking || downloader.isWorking
+    }
+
+    private var installedVersion: String? {
+        // Managed binaries have a sidecar version file; for bundled / custom
+        // we fall back to whatever the running kernel reports.
+        if let b = resolver.current, b.source == .managed,
+           let v = resolver.managedVersion() {
+            return v
+        }
+        if case .running(let v) = kernel.status, !v.isEmpty {
+            return v
+        }
+        return nil
+    }
+
+    private var shouldShowUpdateButton: Bool {
+        guard let latest = downloader.latestKnown else { return false }
+        if let installed = installedVersion, installed == latest { return false }
+        return true
+    }
+
+    @ViewBuilder
+    private var installedRow: some View {
+        HStack(spacing: 8) {
+            Text("Installed")
+                .font(.system(size: 11.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .frame(width: 110, alignment: .leading)
+            Text(installedVersion ?? "—")
+                .font(ChungHwa.Typography.mono(11.5))
+                .foregroundStyle(ChungHwa.Palette.text)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
+            if let b = resolver.current {
+                SourceBadge(source: b.source)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var latestRow: some View {
+        HStack(spacing: 8) {
+            Text("Latest available")
+                .font(.system(size: 11.5))
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .frame(width: 110, alignment: .leading)
+            Text(downloader.latestKnown ?? "—")
+                .font(ChungHwa.Typography.mono(11.5))
+                .foregroundStyle(ChungHwa.Palette.text)
+                .textSelection(.enabled)
+            if let latest = downloader.latestKnown,
+               installedVersion != latest {
+                NewBadge()
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private var lastCheckedRow: some View {
+        HStack(spacing: 8) {
+            Text("Last checked")
+                .font(.system(size: 11))
+                .foregroundStyle(ChungHwa.Palette.dim)
+                .frame(width: 110, alignment: .leading)
+            Text(lastCheckedText)
+                .font(.system(size: 11))
+                .foregroundStyle(ChungHwa.Palette.dim)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var lastCheckedText: String {
+        guard let d = downloader.lastChecked else { return "never" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f.localizedString(for: d, relativeTo: .now)
     }
 
     // MARK: - Kernel binary
@@ -325,6 +453,30 @@ private struct SourceBadge: View {
         case .managed: return "managed"
         case .custom:  return "custom"
         }
+    }
+}
+
+// MARK: - "New" badge
+
+private struct NewBadge: View {
+    var body: some View {
+        Text("New")
+            .font(.system(size: 10, weight: .semibold))
+            .tracking(0.3)
+            .textCase(.uppercase)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 7)
+            .frame(height: 17)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(LinearGradient(colors: [ChungHwa.Palette.brass,
+                                                  ChungHwa.Palette.brassDark],
+                                         startPoint: .top, endPoint: .bottom))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
+            )
     }
 }
 
