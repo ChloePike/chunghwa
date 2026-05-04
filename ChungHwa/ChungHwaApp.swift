@@ -116,15 +116,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Match ClashMac-style window chrome: title bar transparent +
         // .fullSizeContentView so our content extends behind the (still
         // present) title bar, traffic lights overlay the sidebar's top.
-        // Keep `window.toolbar` intact — that's what preserves the
-        // window's top-corner mask. Removing the toolbar entirely makes
-        // the corners go square.
+        // Mask the contentView with a continuous corner radius so the
+        // window stays rounded even when we hide the toolbar background.
         DispatchQueue.main.async {
             for window in NSApp.windows {
                 window.titlebarAppearsTransparent = true
                 window.titleVisibility = .hidden
                 window.styleMask.insert(.fullSizeContentView)
                 window.isMovableByWindowBackground = true
+                if let cv = window.contentView {
+                    cv.wantsLayer = true
+                    cv.layer?.cornerRadius = 10
+                    cv.layer?.cornerCurve = .continuous
+                    cv.layer?.masksToBounds = true
+                }
             }
         }
 
