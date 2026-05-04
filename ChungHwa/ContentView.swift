@@ -62,7 +62,7 @@ struct ContentView: View {
             }
             .ignoresSafeArea(.container, edges: .top)
         }
-        .toolbar(.hidden, for: .windowToolbar)
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .frame(minWidth: 900, minHeight: 600)
         .task {
             // Hydrate the @State selection from the persisted raw on first
