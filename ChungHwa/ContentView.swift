@@ -8,7 +8,7 @@ struct ContentView: View {
             SidebarView(selection: $selection)
         } detail: {
             VStack(spacing: 0) {
-                AppToolbar(title: title)
+                AppToolbar(title: title, onSwitchToProfiles: { selection = .profiles })
                 detailScreen
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

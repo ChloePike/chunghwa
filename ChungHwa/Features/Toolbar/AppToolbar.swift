@@ -12,6 +12,7 @@ import SwiftUI
 /// sidebar collapse, so we don't reproduce those here.
 struct AppToolbar: View {
     let title: String
+    var onSwitchToProfiles: (() -> Void)? = nil
 
     @Environment(KernelController.self) private var kernel
     @Environment(ConfigStore.self) private var configStore
@@ -85,25 +86,52 @@ struct AppToolbar: View {
     private var profilePill: some View {
         let name = profileStore.profiles.first(where: { $0.id == profileStore.activeProfileID })?.name
             ?? "No profile"
-        return HStack(spacing: 6) {
-            Text(name)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(ChungHwa.Palette.text)
-                .lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(ChungHwa.Palette.dim)
+        return Menu {
+            if profileStore.profiles.isEmpty {
+                Text("No profiles")
+            } else {
+                ForEach(profileStore.profiles) { p in
+                    Button {
+                        profileStore.activate(p.id)
+                        Task { await kernel.reload() }
+                    } label: {
+                        if profileStore.activeProfileID == p.id {
+                            Label(p.name, systemImage: "checkmark")
+                        } else {
+                            Text(p.name)
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("Manage profiles…") {
+                onSwitchToProfiles?()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(ChungHwa.Palette.text)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(ChungHwa.Palette.dim)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(ChungHwa.Palette.pillBg)
+                    .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
+            )
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
         }
-        .padding(.horizontal, 10)
-        .frame(height: 28)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(ChungHwa.Palette.pillBg)
-                .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5))
-        .help("Active profile (open Profiles tab to switch)")
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Active profile — click to switch")
     }
 
     private var chipCluster: some View {
