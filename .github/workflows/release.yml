@@ -48,7 +48,7 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Build .app + .dmg (unsigned, ad-hoc)
+      - name: Build three slices — universal, arm64, x86_64
         env:
           # Authenticated api.github.com quota for fetch-mihomo.sh.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,7 +60,13 @@ jobs:
           PROVISIONING_PROFILE_SPECIFIER: ""
         run: |
           chmod +x scripts/make-dmg.sh scripts/fetch-mihomo.sh
-          ./scripts/make-dmg.sh "${GITHUB_REF_NAME#v}"
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Universal first (script will fetch the universal mihomo from
+          # GitHub releases). Arch-specific builds run after and lipo-thin
+          # mihomo locally before xcodebuild.
+          ./scripts/make-dmg.sh "$VERSION" universal
+          ./scripts/make-dmg.sh "$VERSION" arm64
+          ./scripts/make-dmg.sh "$VERSION" x86_64
 
       - name: Hash + list artifact
         run: |
