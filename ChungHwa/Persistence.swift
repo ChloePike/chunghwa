@@ -11,7 +11,7 @@ struct PersistenceController {
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
         }
-        let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "storage")
+        let log = Logger(subsystem: "org.clash.ChungHwa", category: "storage")
         container.loadPersistentStores { _, error in
             if let error = error as NSError? {
                 log.error("CoreData load failed: \(error, privacy: .public)")

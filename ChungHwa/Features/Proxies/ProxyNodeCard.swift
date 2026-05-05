@@ -10,7 +10,7 @@ struct ProxyNodeCard: View, Equatable {
 
     @State private var shimmer: Bool = false
 
-    /// 组列表 1Hz 抖动时只让真有变化的卡重渲。
+    /// Equatable so the 1Hz refresh only re-renders cards whose state actually changed.
     static func == (lhs: ProxyNodeCard, rhs: ProxyNodeCard) -> Bool {
         lhs.name == rhs.name
             && lhs.proxy?.lastDelay == rhs.proxy?.lastDelay

@@ -6,7 +6,7 @@
 
 ### Q1 · App 命名与 Bundle ID — ✅ 已定
 - 名字：**ChungHwa**
-- Bundle ID：`com.tzaigroup.chunghwa`
+- Bundle ID：`org.clash.ChungHwa`
 
 ### Q2 · 是否真的要用 CoreData
 - 模板默认带，但 SwiftData / GRDB / 纯 JSON 文件都行
@@ -86,7 +86,7 @@
 
 | 项 | 结论 |
 | --- | --- |
-| Q1 命名 / Bundle ID | ✅ ChungHwa / `com.tzaigroup.chunghwa` |
+| Q1 命名 / Bundle ID | ✅ ChungHwa / `org.clash.ChungHwa` |
 | Q3 最低 macOS | ✅ 不指定，沿用模板 |
 | Q4 签名 / 分发 | ✅ 自用，无开发者账号，ad-hoc 签名 |
 | Q5 内核集成主路径 | ✅ 子进程托管 mihomo binary |

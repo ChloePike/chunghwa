@@ -28,7 +28,7 @@ final class ProxyStore {
     /// the server has nothing else to say).
     private var persistedDelays: [String: PersistedDelay] = [:]
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "proxies")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "proxies")
 
     init() {
         let snapshot = Database.shared.loadAllProxyDelays()

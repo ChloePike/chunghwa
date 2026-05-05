@@ -45,7 +45,7 @@ final class KernelDownloader {
     private(set) var lastChecked: Date?
 
     private let resolver: KernelBinaryResolver
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "downloader")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "downloader")
     private let session: URLSession
 
     init(resolver: KernelBinaryResolver) {

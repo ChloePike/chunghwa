@@ -236,7 +236,7 @@ struct LogsView: View {
         }
     }
 
-    private static let exportLogger = Logger(subsystem: "com.tzaigroup.chunghwa", category: "logs")
+    private static let exportLogger = Logger(subsystem: "org.clash.ChungHwa", category: "logs")
 
     private static let exportFilenameFormatter: DateFormatter = {
         let f = DateFormatter()

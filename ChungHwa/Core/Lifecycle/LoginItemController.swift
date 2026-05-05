@@ -8,7 +8,7 @@ import ServiceManagement
 final class LoginItemController {
     private(set) var isRegistered: Bool = SMAppService.mainApp.status == .enabled
     private(set) var lastError: String?
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "loginitem")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "loginitem")
 
     func refresh() {
         isRegistered = SMAppService.mainApp.status == .enabled

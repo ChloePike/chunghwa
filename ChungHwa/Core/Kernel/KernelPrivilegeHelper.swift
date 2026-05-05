@@ -9,9 +9,9 @@ import OSLog
 /// NOT `@MainActor`: `Process.waitUntilExit()` is a synchronous blocking
 /// call. Pinning this struct to MainActor would freeze the entire UI for
 /// the duration of the auth prompt and leave it stuck if the user cancels
-/// (which is exactly the bug "取消后没办法继续执行" reported).
+/// (this was the "can't retry after cancel" bug).
 struct KernelPrivilegeHelper {
-    static let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "privilege")
+    static let log = Logger(subsystem: "org.clash.ChungHwa", category: "privilege")
 
     /// Returns true if `path` is owned by root and has the setuid bit set.
     static func isPrivileged(path: String) -> Bool {

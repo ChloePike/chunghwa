@@ -36,7 +36,7 @@ final class KernelController {
     private var stderrPipe: Pipe?
     private var streamTasks: [Task<Void, Never>] = []
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "kernel")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "kernel")
     private let externalControllerPort = 47913
 
     private let resolver: KernelBinaryResolver
@@ -161,8 +161,9 @@ final class KernelController {
         status = .idle
     }
 
-    /// 热加载：把当前 active profile 的 yaml 重新合成、写到 configFile，再让 mihomo 重读。
-    /// 进程不重启、连接不中断。内核未运行时降级为 start()。
+    /// Hot-reload: re-compose the active profile's yaml, write to
+    /// configFile, ask mihomo to re-read it. Process stays up,
+    /// connections survive. Falls back to start() when not running.
     func reload() async {
         guard case .running = status, let client = apiClient, let secret = runtimeSecret else {
             await start()
@@ -177,18 +178,19 @@ final class KernelController {
             }
         } catch {
             log.error("kernel reload failed: \(String(describing: error), privacy: .public)")
-            // 保持当前 running 状态：旧配置仍在生效
+            // Stay in .running on failure — old config is still in effect.
         }
     }
 
-    /// 冷重启：杀进程后重新拉起。`reload()` 不可用时（例如配置变化太大）的兜底。
+    /// Cold restart: kill + spawn. Fallback for changes that reload()
+    /// can't apply hot (port, tun, authentication, etc.).
     func restart() async {
         log.info("kernel restart requested")
         stop()
         await start()
     }
 
-    /// 暴露当前用于启动 mihomo 的配置文件路径，方便外层在 reload 前写入新内容。
+    /// The config file path mihomo is currently running with.
     var activeConfigFile: URL { configFile }
 
     private var runtimeSecret: String?

@@ -3,7 +3,8 @@ import SwiftUI
 // MARK: - DNSEditorSheet
 
 /// Sheet for editing the upstream DNS resolver lists. Two ordered lists —
-/// 主上游 (`nameserver`) and 兜底 (`fallback`) — each row a TextField + delete
+/// Two ordered editable lists — primary (`nameserver`) and fallback.
+/// Each row is a TextField + delete
 /// button. Save trims whitespace, drops empties, persists via ConfigStore,
 /// and (if the kernel is up) PATCH /configs.
 struct DNSEditorSheet: View {
@@ -170,9 +171,10 @@ struct DNSEditorSheet: View {
         let ns = nameservers.map { $0.value }
         let fb = fallback.map { $0.value }
         await config.setDNS(nameservers: ns, fallback: fb, api: kernel.apiClient)
-        // PATCH /configs 对 dns 子树的覆盖不彻底（且 user yaml 自带 dns
-        // 时我们根本不注入），reload 让新 nameserver / fallback 通过
-        // ConfigComposer 重新落盘后即刻应用。
+        // PATCH /configs doesn't fully overwrite the dns subtree (and we
+        // don't inject one at all when user yaml ships its own dns block).
+        // reload() pushes the freshly-composed yaml so the new nameserver /
+        // fallback list takes effect immediately.
         await kernel.reload()
         dismiss()
     }

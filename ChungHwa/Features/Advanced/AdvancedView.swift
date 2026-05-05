@@ -74,8 +74,9 @@ struct AdvancedView: View {
             Task { await config.setTCPConcurrent(newValue, api: kernel.apiClient) }
         }
         .onChange(of: dnsMode) { _, newValue in
-            // PATCH 不可靠地热更 enhanced-mode（fake-ip / redir-host），
-            // reload 让 ConfigComposer 把新 yaml 推下去再生效。
+            // PATCH alone doesn't reliably hot-swap enhanced-mode
+            // (fake-ip / redir-host); kernel.reload() pushes the
+            // composed yaml so the new mode actually takes effect.
             Task {
                 await config.setDNSMode(newValue, api: kernel.apiClient)
                 await kernel.reload()
@@ -294,7 +295,7 @@ struct AdvancedView: View {
             }
             // Footer: hint + apply button. Auth is part of the boot yaml so
             // it doesn't take effect until the kernel restarts; expose a
-            // single "应用" rather than restarting on every keystroke.
+            // single Apply button rather than restarting on every keystroke.
             HStack(alignment: .center, spacing: 8) {
                 (Text("本机（")
                     + Text("127.0.0.0/8").font(ChungHwa.Typography.mono(10.5))

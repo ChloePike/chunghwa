@@ -16,7 +16,7 @@ actor MihomoStreamClient {
     let baseURL: URL
     private let secret: String
     private let session: URLSession
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "stream")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "stream")
 
     init(baseURL: URL, secret: String) {
         self.baseURL = baseURL

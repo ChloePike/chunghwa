@@ -137,7 +137,7 @@ actor MihomoAPIClient {
         try await sendDecoding("/version", method: "GET")
     }
 
-    /// 让 mihomo 重新读取磁盘上的配置文件并热加载，无需重启进程。
+    /// Ask mihomo to re-read the on-disk config and hot-reload — no process restart.
     func reloadConfig(path: String, force: Bool = true) async throws {
         let query = force ? [URLQueryItem(name: "force", value: "true")] : []
         try await sendVoid("/configs", method: "PUT", query: query, body: ReloadConfigBody(path: path))

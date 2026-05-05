@@ -14,7 +14,7 @@ final class RuleStore {
     private(set) var updatingProviders: Set<String> = []
     private(set) var lastError: String?
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "rules")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "rules")
 
     func reset() {
         rules = []

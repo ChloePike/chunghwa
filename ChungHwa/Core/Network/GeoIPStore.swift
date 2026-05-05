@@ -51,7 +51,7 @@ final class GeoIPStore {
 
     @ObservationIgnored private var lookupTask: Task<Void, Never>?
     @ObservationIgnored private let log = Logger(
-        subsystem: "com.tzaigroup.chunghwa", category: "geoip")
+        subsystem: "org.clash.ChungHwa", category: "geoip")
     @ObservationIgnored private let session: URLSession
 
     /// Sentinel value persisted in the cache for private / loopback IPs so

@@ -10,7 +10,7 @@ import SQLite3
 final class Database {
     static let shared = Database()
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "db")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "db")
     private var db: OpaquePointer?
 
     private static let SQLITE_TRANSIENT = unsafeBitCast(

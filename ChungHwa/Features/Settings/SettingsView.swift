@@ -565,7 +565,7 @@ struct SettingsView: View {
             // Restart so the now-setuid binary actually runs as root.
             await kernel.restart()
             // stat() doesn't ride observability — re-read explicitly so the
-            // card flips to "已授权" without waiting for an unrelated re-render.
+            // card flips to the authorized state without waiting for an unrelated re-render.
             refreshTunPrivilege()
         } catch {
             privilegeError = (error as NSError).localizedDescription

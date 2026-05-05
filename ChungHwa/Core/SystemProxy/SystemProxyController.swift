@@ -37,7 +37,7 @@ final class SystemProxyController {
     /// proxy at the new port without a separate write here.
     var port: Int { ConfigStore.currentMixedPort }
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "systemProxy")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "systemProxy")
 
     /// Cached admin auth — created lazily on first apply(), reused forever.
     /// `@ObservationIgnored` so observation tracking isn't affected.
@@ -196,7 +196,7 @@ final class SystemProxyController {
                 next[kSCPropNetProxiesSOCKSProxy as String]  = host
                 next[kSCPropNetProxiesSOCKSPort as String]   = port
                 // Bypass list = baseline (loopback + RFC1918 + .local) PLUS
-                // anything the user added in Advanced → 代理绕过. We always
+                // anything the user added in Advanced > Bypass list. We always
                 // overwrite so changes in the UI take effect on the next
                 // toggle-cycle.
                 next[kSCPropNetProxiesExceptionsList as String] = Self.composeExceptions()

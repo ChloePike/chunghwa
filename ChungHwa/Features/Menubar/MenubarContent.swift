@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// 菜单栏弹出窗口。固定宽度 + 玻璃底；Live 流量 → 快捷开关 → 出站模式 →
-/// per-group 节点 → 配置 → 设置/退出。
+/// MenuBarExtra popup. Fixed-width glass-material panel; layout is
+/// live stats → quick toggles → mode → per-group node picker →
+/// profile picker → footer (settings / quit).
 struct MenubarContent: View {
     @Environment(KernelController.self) private var kernel
     @Environment(SystemProxyController.self) private var systemProxy
@@ -21,8 +22,9 @@ struct MenubarContent: View {
             sectionDivider.padding(.vertical, 4)
             modeSection
             sectionDivider.padding(.vertical, 3)
-            // 节点组单行 + 左侧 popover；ScrollView 在 .menuBarExtraStyle(.window)
-            // 下会塌缩，所以全部直接 inline。
+            // One row per group with a leading-edge popover. ScrollView
+            // collapses inside .menuBarExtraStyle(.window), so the list is
+            // inline and the popup just grows tall when there are many groups.
             groupSection
             if !proxyStore.groups.isEmpty {
                 sectionDivider.padding(.vertical, 3)
@@ -50,7 +52,7 @@ struct MenubarContent: View {
         }
     }
 
-    /// Three compact pills mirroring the toolbar chips: 系统代理 / TUN / 匿名.
+    /// Three compact pills mirroring the toolbar chips: system proxy / TUN / anonymous.
     private var quickToggleRow: some View {
         HStack(spacing: 6) {
             togglePill(
@@ -276,8 +278,8 @@ struct MenubarContent: View {
 }
 
 extension Notification.Name {
-    /// 菜单栏「检查内核更新」按下时发出。监听端（主窗口 Settings）暂未接入，
-    /// 后续再补；不接也不会报错，只是按钮变成 no-op。
+    /// Posted when the user picks "Check kernel update" from the menubar.
+    /// No-op until a listener (Settings) wires it up; never crashes.
     static let chungHwaCheckKernelUpdate = Notification.Name("ChungHwa.CheckKernelUpdate")
 }
 
@@ -312,15 +314,15 @@ private struct MenubarLiveStats: View {
     }
 }
 
-/// 单行菜单项的显示标签：左 icon、中 title、右可选 trailing label + chevron。
-/// 点击高亮由父 Button/Menu 的 hover 渲染，但 .plain 不带高亮，于是我们在
-/// onHover 里手动加 fill 背景。
+/// One menubar row: leading icon, title, optional trailing label, optional
+/// chevron. `.plain` button style doesn't draw a hover highlight, so we
+/// fill the rect manually based on `onHover`.
 private struct MenubarRowLabel: View {
     let icon: String
     let title: String
     let trailing: String?
     let showsChevron: Bool
-    var tint: Color? = nil   // nil → 默认 Palette.text；非 nil → icon + 文字都改色
+    var tint: Color? = nil   // nil = default Palette.text; non-nil = recolor both icon + text
 
     @State private var hovering = false
 
@@ -528,10 +530,10 @@ struct MenubarIconName {
     }
 }
 
-/// macOS 菜单栏状态项：盾形图标 + 实时上下行速率。
-/// 拆成 icon + speed 两个叶子：speed 每秒变（订阅 TrafficStore），icon 仅
-/// kernel/systemProxy 状态变时刷。图标和文字各自有固定 frame，文字行的字符
-/// 数变化只影响 speed leaf 内部，不再带着 icon 一起跳。
+/// macOS status-bar item: shield icon + live up/down rates.
+/// Split into icon + speed leaves so the speed text (reading TrafficStore
+/// at 1Hz) re-renders without the icon. Both leaves have fixed frames so
+/// digit-width changes can't drag the icon left/right as the rate ticks.
 struct MenubarLabel: View {
     var body: some View {
         HStack(spacing: 4) {
@@ -582,9 +584,9 @@ private struct MenubarLabelSpeed: View {
         }
     }
 
-    /// 紧凑速率，固定 4 字符宽度（末尾空格补足）。
-    /// 4 chars 含义："0   " / "100B" / "12 K" / "1.2M" / "1.2G"。
-    /// 状态栏 item 不再因为 "0" → "1.2M" 长度跳变把 icon 一起拽着左右挪。
+    /// Compact rate, padded to 4 chars (trailing spaces). Examples:
+    /// "0   " / "100B" / "12 K" / "1.2M" / "1.2G". Constant string length
+    /// keeps the status item from horizontally dancing as the rate rolls.
     private func short(_ bps: Int) -> String {
         let raw: String
         switch bps {

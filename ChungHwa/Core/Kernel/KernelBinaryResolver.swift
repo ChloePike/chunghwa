@@ -8,7 +8,7 @@ import OSLog
 @Observable
 @MainActor
 final class KernelBinaryResolver {
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "binary")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "binary")
     private let defaults = UserDefaults.standard
     private static let customPathKey = "KernelCustomBinaryPath"
 

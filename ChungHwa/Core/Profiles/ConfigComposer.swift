@@ -43,7 +43,7 @@ enum ConfigComposer {
         // Whether to redirect transparent DNS (port 53) through mihomo's
         // own resolver. Off by default for users who would prefer DNS to
         // pass through to whatever the OS / DHCP says (real IPs back).
-        // Gating this is what the "53 端口劫持" toggle in Advanced controls.
+        // Gating this is what the DNS-hijack toggle in Advanced controls.
         let hijackDNS = ConfigStore.currentDNS().hijackEnabled
         let tunHijackLine = hijackDNS ? "\n  dns-hijack:\n    - any:53" : ""
 

@@ -29,7 +29,7 @@ final class ConnectionsStore {
     /// Keys are connection ids; entries vanish when the connection drops.
     private(set) var rates: [String: ConnectionRate] = [:]
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "connections")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "connections")
 
     /// Minimum gap between published snapshots. Mihomo's /connections stream
     /// can burst several frames within a few hundred ms when traffic spikes;

@@ -31,7 +31,7 @@ final class TrafficHistoryStore {
 
     private(set) var minutes: [Bucket] = []
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "traffic-history")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "traffic-history")
 
     private static let maxMinutes = 1440
     private static let keepHours = 24

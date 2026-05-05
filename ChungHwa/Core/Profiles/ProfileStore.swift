@@ -57,7 +57,7 @@ final class ProfileStore {
     private(set) var lastAutoRefresh: Date?
     private(set) var autoRefreshTask: Task<Void, Never>?
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "profiles")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "profiles")
     private let session: URLSession
     private let appSupportRoot: URL
     private let metadataURL: URL

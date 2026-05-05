@@ -3,7 +3,7 @@
 ## Workflow
 
 - **每一次变更都需要 commit + push，不必再问**。完成一组连贯改动后立即 `git add` → commit → `git push origin main`。
-- 沟通用中文；代码、commit message、文件名用英文。
+- 沟通用中文；代码 / 注释 / commit message / 文件名一律用英文（中文注释会拖慢扫读）。UI 字符串（用户看到的中文）不在此列。
 - 不在 `main` 上做 force push 或 reset --hard。
 - 用 conventional-style 简短 commit title（< 70 字符），正文写「为什么」。
 - **不要 `pkill` ChungHwa**。mihomo 是 ChungHwa 的子进程，杀父进程会
@@ -68,5 +68,5 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 读 os_log（kernel / binary / downloader）：
 
 ```sh
-log show --predicate 'subsystem == "com.tzaigroup.chunghwa"' --last 5m --info --debug --style compact
+log show --predicate 'subsystem == "org.clash.ChungHwa"' --last 5m --info --debug --style compact
 ```

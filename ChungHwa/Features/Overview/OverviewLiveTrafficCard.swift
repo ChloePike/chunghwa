@@ -191,7 +191,7 @@ struct TrafficChart: View {
     }
 }
 
-/// Session totals + today's累计. `today` derives from history minute
+/// Session totals + today's cumulative. `today` derives from history minute
 /// buckets so it survives the 90s rolling buffer.
 struct TrafficTotalsRow: View {
     @Environment(TrafficStore.self) private var traffic

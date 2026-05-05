@@ -134,7 +134,7 @@ final class ConfigStore {
         return array.compactMap { $0["ip"] as? String }
     }
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "config")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "config")
 
     init() {
         self.tunEnabled = UserDefaults.standard.bool(forKey: Self.tunEnabledDefaultsKey)

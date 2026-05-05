@@ -94,7 +94,7 @@ struct SubscriptionHealthCard: View {
     }
 
     /// `snapshotProxies` includes both groups and concrete nodes; show the
-    /// concrete-node count to match what the user expects from "节点".
+    /// concrete-node count to match what the user expects from a "nodes" stat.
     private var nodeCount: Int {
         proxyStore.snapshotProxies.values.reduce(into: 0) { acc, p in
             if !p.isGroup { acc += 1 }

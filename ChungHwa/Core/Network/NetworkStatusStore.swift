@@ -7,7 +7,7 @@ import Darwin
 import CoreWLAN
 #endif
 
-/// Aggregates the various probes the Overview "网络状态" card surfaces:
+/// Aggregates the probes the Overview's network card surfaces:
 /// internet reachability, DNS latency, gateway latency, current interface
 /// type, the local IPv4 address, and (when mihomo is up) the public IP that
 /// traffic actually exits from. Each measurement is independent so a single
@@ -31,10 +31,10 @@ final class NetworkStatusStore {
 
     // MARK: - Internals
 
-    private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "network")
+    private let log = Logger(subsystem: "org.clash.ChungHwa", category: "network")
 
     @ObservationIgnored private var pathMonitor: NWPathMonitor?
-    @ObservationIgnored private var pathMonitorQueue = DispatchQueue(label: "com.tzaigroup.chunghwa.network.pathmonitor")
+    @ObservationIgnored private var pathMonitorQueue = DispatchQueue(label: "org.clash.ChungHwa.network.pathmonitor")
     @ObservationIgnored private var currentPath: NWPath?
 
     @ObservationIgnored private var autoRefreshTask: Task<Void, Never>?
@@ -234,7 +234,7 @@ final class NetworkStatusStore {
 
         let start = Date()
         let result: Bool = await withCheckedContinuation { cont in
-            let queue = DispatchQueue(label: "com.tzaigroup.chunghwa.network.dnsprobe")
+            let queue = DispatchQueue(label: "org.clash.ChungHwa.network.dnsprobe")
             var settled = false
             conn.stateUpdateHandler = { state in
                 guard !settled else { return }
@@ -296,7 +296,7 @@ final class NetworkStatusStore {
         )
         let start = Date()
         let ok: Bool = await withCheckedContinuation { cont in
-            let queue = DispatchQueue(label: "com.tzaigroup.chunghwa.network.tcpprobe")
+            let queue = DispatchQueue(label: "org.clash.ChungHwa.network.tcpprobe")
             var settled = false
             conn.stateUpdateHandler = { state in
                 guard !settled else { return }
