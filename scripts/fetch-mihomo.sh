@@ -30,7 +30,7 @@ fi
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
   echo "→ querying latest mihomo release tag…"
-  VERSION=$(curl -fsSL "${CURL_AUTH[@]}" \
+  VERSION=$(curl -fsSL ${CURL_AUTH[@]+"${CURL_AUTH[@]}"} \
       -H "Accept: application/vnd.github+json" \
       "https://api.github.com/repos/$REPO/releases/latest" \
     | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
@@ -55,7 +55,7 @@ download_arch () {
   local asset="mihomo-darwin-${arch}-${VERSION}.gz"
   local url="https://github.com/$REPO/releases/download/$VERSION/$asset"
   echo "→ downloading $asset"
-  curl -fL --progress-bar "${CURL_AUTH[@]}" -o "$TMP/$asset" "$url"
+  curl -fL --progress-bar ${CURL_AUTH[@]+"${CURL_AUTH[@]}"} -o "$TMP/$asset" "$url"
   gunzip -k "$TMP/$asset"
   mv "$TMP/mihomo-darwin-${arch}-${VERSION}" "$TMP/mihomo-${arch}"
   chmod +x "$TMP/mihomo-${arch}"

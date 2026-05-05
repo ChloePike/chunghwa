@@ -162,11 +162,10 @@ private struct ToolbarTUN: View {
         let kernelReady = kernel.apiClient != nil
         let on = config.tunEnabled
         Button {
-            // If the kernel binary doesn't have setuid-root yet, TUN can't
-            // actually open /dev/utun — bounce to Settings so the user can
-            // grant privileges instead of leaving them with a silent no-op.
-            if !on, let path = kernel.activeBinary?.url.path,
-               !KernelPrivilegeHelper.isPrivileged(path: path) {
+            // If there's no privileged kernel installed, TUN can't actually
+            // open /dev/utun — bounce to Settings so the user can grant
+            // privileges instead of leaving them with a silent no-op.
+            if !on, !KernelPrivilegeHelper.isPrivileged() {
                 NotificationCenter.default.post(
                     name: .chungHwaSwitchTab,
                     object: SidebarTab.settings.rawValue

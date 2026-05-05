@@ -120,23 +120,12 @@ enum ConfigComposer {
         return lines.joined(separator: "\n")
     }
 
-    /// Quick check that the active mihomo binary is setuid-root, mirroring
-    /// `KernelPrivilegeHelper.isPrivileged` without the dependency. Returns
-    /// false defensively when the path can't be resolved.
+    /// Quick check that a privileged (setuid-root) mihomo is available.
+    /// Privilege now lives at the canonical
+    /// `/Library/PrivilegedHelperTools/org.clash.ChungHwa.mihomo`, so we
+    /// just stat that one path.
     private static func bundledKernelIsPrivileged() -> Bool {
-        let candidates: [String?] = [
-            UserDefaults.standard.string(forKey: "KernelCustomBinaryPath"),
-            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-                .first?.appendingPathComponent("ChungHwa/kernel/mihomo").path,
-            Bundle.main.resourceURL?.appendingPathComponent("mihomo").path,
-        ]
-        for case let p? in candidates where FileManager.default.fileExists(atPath: p) {
-            var st = stat()
-            guard stat(p, &st) == 0 else { continue }
-            if st.st_uid == 0 && (st.st_mode & UInt16(S_ISUID)) != 0 { return true }
-            return false
-        }
-        return false
+        return KernelPrivilegeHelper.isPrivileged()
     }
 
     /// Plain-UDP DNS used to bootstrap DoH/DoT endpoint resolution.

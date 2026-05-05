@@ -15,6 +15,7 @@ struct SettingsView: View {
 
     @State private var localChecking: Bool = false
     @State private var grantingPrivileges: Bool = false
+    @State private var revokingPrivileges: Bool = false
     @State private var privilegeError: String?
     @State private var portDraft: Int = ConfigStore.currentMixedPort
     @State private var applyingPort: Bool = false
@@ -508,20 +509,32 @@ struct SettingsView: View {
                                          ? ChungHwa.Palette.patina
                                          : ChungHwa.Palette.earth)
 
-                    Text(tunPrivilegedSnap
-                         ? "已授权 root，TUN 可用"
-                         : "未授权，TUN 不可用")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(ChungHwa.Palette.text)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tunPrivilegedSnap
+                             ? "已授权（\(KernelPrivilegeHelper.privilegedBinaryPath)）"
+                             : "未授权，TUN 不可用")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(ChungHwa.Palette.text)
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                    }
 
                     Spacer(minLength: 8)
 
-                    if !tunPrivilegedSnap {
+                    if tunPrivilegedSnap {
+                        GhostButton(title: revokingPrivileges ? "撤销中…" : "撤销",
+                                    systemImage: "lock",
+                                    tone: .destructive) {
+                            Task { await revokePrivileges() }
+                        }
+                        .disabled(revokingPrivileges)
+                    } else {
                         BrassButton(title: grantingPrivileges ? "授权中…" : "授权",
                                     systemImage: "lock.open") {
                             Task { await grantPrivileges() }
                         }
-                        .disabled(grantingPrivileges || kernel.activeBinary == nil)
+                        .disabled(grantingPrivileges || resolver.nonPrivilegedCurrent == nil)
                     }
                 }
                 .task(id: kernel.activeBinary?.url.path ?? "") {
@@ -536,7 +549,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text("TUN 需要 mihomo 以 root 运行才能创建虚拟网卡。可随时用 chmod u-s 撤销。")
+                Text("TUN 需要 mihomo 以 root 运行才能创建虚拟网卡。存放在 `/Library/PrivilegedHelperTools/`，可以随时撤销。")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .fixedSize(horizontal: false, vertical: true)
@@ -548,24 +561,42 @@ struct SettingsView: View {
     }
 
     private func refreshTunPrivilege() {
-        guard let path = kernel.activeBinary?.url.path else {
-            tunPrivilegedSnap = false
-            return
-        }
-        tunPrivilegedSnap = KernelPrivilegeHelper.isPrivileged(path: path)
+        tunPrivilegedSnap = KernelPrivilegeHelper.isPrivileged()
     }
 
     private func grantPrivileges() async {
-        guard let path = kernel.activeBinary?.url.path else { return }
+        // Authorize against the binary that would otherwise win — i.e. the
+        // custom/managed/bundled tier — so the privileged copy mirrors the
+        // user's current preferred kernel.
+        guard let source = resolver.nonPrivilegedCurrent else {
+            privilegeError = "找不到可用的 mihomo 二进制"
+            return
+        }
         grantingPrivileges = true
         privilegeError = nil
         defer { grantingPrivileges = false }
         do {
-            try await KernelPrivilegeHelper.grantPrivileges(path: path)
-            // Restart so the now-setuid binary actually runs as root.
+            try await KernelPrivilegeHelper.grantPrivileges(sourcePath: source.url.path)
+            resolver.refresh()
+            // Restart so the now-privileged binary actually runs as root.
             await kernel.restart()
             // stat() doesn't ride observability — re-read explicitly so the
-            // card flips to the authorized state without waiting for an unrelated re-render.
+            // card flips to the authorized state without waiting for an
+            // unrelated re-render.
+            refreshTunPrivilege()
+        } catch {
+            privilegeError = (error as NSError).localizedDescription
+        }
+    }
+
+    private func revokePrivileges() async {
+        revokingPrivileges = true
+        privilegeError = nil
+        defer { revokingPrivileges = false }
+        do {
+            try await KernelPrivilegeHelper.revokePrivileges()
+            resolver.refresh()
+            await kernel.restart()
             refreshTunPrivilege()
         } catch {
             privilegeError = (error as NSError).localizedDescription
@@ -631,9 +662,10 @@ private struct SourceBadge: View {
 
     private var label: String {
         switch source {
-        case .bundled: return "内置"
-        case .managed: return "托管"
-        case .custom:  return "自定义"
+        case .privileged: return "已授权"
+        case .bundled:    return "内置"
+        case .managed:    return "托管"
+        case .custom:     return "自定义"
         }
     }
 }

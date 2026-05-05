@@ -4,7 +4,13 @@ import OSLog
 
 /// Decides which mihomo binary the kernel should run.
 ///
-/// Priority: custom (user-picked) > managed (in-app downloader) > bundled (shipped with .app).
+/// Priority: privileged (setuid root, in `/Library/PrivilegedHelperTools/`) >
+/// custom (user-picked) > managed (in-app downloader) > bundled (shipped with .app).
+///
+/// The privileged binary is authoritative when present: if the user authorized,
+/// that's the kernel we run, regardless of which non-privileged source would
+/// otherwise win. To update the privileged binary, the user re-authorizes from
+/// the desired source.
 @Observable
 @MainActor
 final class KernelBinaryResolver {
@@ -44,26 +50,40 @@ final class KernelBinaryResolver {
         }
     }
 
-    /// Recompute `current` based on what's on disk.
+    /// Recompute `current` based on what's on disk. Privileged wins over
+    /// every other tier: if the user has granted root, that's the kernel
+    /// we run.
     func refresh() {
-        if let custom = customPath, isExecutable(custom) {
-            current = KernelBinary(url: custom, source: .custom)
-            log.info("resolved kernel: custom \(custom.path, privacy: .public)")
+        if KernelPrivilegeHelper.isPrivileged() {
+            let privilegedURL = URL(fileURLWithPath: KernelPrivilegeHelper.privilegedBinaryPath)
+            current = KernelBinary(url: privilegedURL, source: .privileged)
+            log.info("resolved kernel: privileged \(privilegedURL.path, privacy: .public)")
             return
         }
-        let managed = managedBinaryURL
-        if isExecutable(managed) {
-            current = KernelBinary(url: managed, source: .managed)
-            log.info("resolved kernel: managed \(managed.path, privacy: .public)")
-            return
-        }
-        if let bundled = bundledBinaryURL() {
-            current = KernelBinary(url: bundled, source: .bundled)
-            log.info("resolved kernel: bundled \(bundled.path, privacy: .public)")
+        if let nonPrivileged = nonPrivilegedCurrent {
+            current = nonPrivileged
+            log.info("resolved kernel: \(nonPrivileged.source.displayName, privacy: .public) \(nonPrivileged.url.path, privacy: .public)")
             return
         }
         current = nil
         log.error("no kernel binary found")
+    }
+
+    /// What `refresh()` would resolve to if `KernelPrivilegeHelper.isPrivileged()`
+    /// were false. Used by Settings to pick the source for the
+    /// `cp → /Library/PrivilegedHelperTools/` step when the user authorizes.
+    var nonPrivilegedCurrent: KernelBinary? {
+        if let custom = customPath, isExecutable(custom) {
+            return KernelBinary(url: custom, source: .custom)
+        }
+        let managed = managedBinaryURL
+        if isExecutable(managed) {
+            return KernelBinary(url: managed, source: .managed)
+        }
+        if let bundled = bundledBinaryURL() {
+            return KernelBinary(url: bundled, source: .bundled)
+        }
+        return nil
     }
 
     /// Forget the user-managed downloaded copy, drop any custom override, fall back to bundled.
