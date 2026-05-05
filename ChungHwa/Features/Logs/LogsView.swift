@@ -40,10 +40,14 @@ struct LogsView: View {
     @FocusState private var filterFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            toolbar
+        // Filter once per body — visibleLines was being walked twice (count
+        // label + ForEach), and each walk does N caseInsensitiveContains.
+        let visible = visibleLines
+        let total = sourceLines.count
+        return VStack(alignment: .leading, spacing: 10) {
+            toolbar(visibleCount: visible.count, total: total)
             ChCard(padding: 0) {
-                logScroll
+                logScroll(visible: visible)
             }
         }
         .padding(.horizontal, 18)
@@ -79,7 +83,7 @@ struct LogsView: View {
 
     // MARK: - Toolbar
 
-    private var toolbar: some View {
+    private func toolbar(visibleCount: Int, total: Int) -> some View {
         HStack(spacing: 10) {
             ChSeg(
                 value: filter,
@@ -91,7 +95,7 @@ struct LogsView: View {
 
             Spacer(minLength: 0)
 
-            countLabel
+            countLabel(visible: visibleCount, total: total)
 
             ChPill(active: paused, action: togglePause) {
                 HStack(spacing: 4) {
@@ -154,9 +158,7 @@ struct LogsView: View {
     }
 
     @ViewBuilder
-    private var countLabel: some View {
-        let visible = visibleLines.count
-        let total = sourceLines.count
+    private func countLabel(visible: Int, total: Int) -> some View {
         if isSearching && visible == 0 {
             Text("无匹配")
                 .font(ChungHwa.Typography.mono(11))
@@ -172,12 +174,13 @@ struct LogsView: View {
 
     // MARK: - Scroll
 
-    private var logScroll: some View {
+    private func logScroll(visible: [LogLine]) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(visibleLines) { line in
+                    ForEach(visible) { line in
                         LogRow(line: line, query: query)
+                            .equatable()
                             .id(line.id)
                     }
                 }
@@ -286,9 +289,17 @@ struct LogsView: View {
     }
 }
 
-private struct LogRow: View {
+private struct LogRow: View, Equatable {
     let line: LogLine
     let query: String
+
+    /// Lines are immutable once observed (id+text+stream don't change), so
+    /// id+query is a complete equality fingerprint. .equatable() at the
+    /// ForEach call site uses this to skip re-rendering rows whose query
+    /// match state hasn't changed — major win when new lines stream in.
+    static func == (lhs: LogRow, rhs: LogRow) -> Bool {
+        lhs.line.id == rhs.line.id && lhs.query == rhs.query
+    }
 
     private static let formatter: DateFormatter = {
         let f = DateFormatter()

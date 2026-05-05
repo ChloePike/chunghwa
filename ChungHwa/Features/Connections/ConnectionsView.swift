@@ -27,9 +27,12 @@ struct ConnectionsView: View {
     @FocusState private var listFocused: Bool
 
     var body: some View {
-        VStack(spacing: 10) {
-            toolbar
-            cardArea
+        // Filter once per body — `rows` was being recomputed by the toolbar
+        // count and the row list independently.
+        let visible = rows
+        return VStack(spacing: 10) {
+            toolbar(rows: visible)
+            cardArea(rows: visible)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
@@ -89,10 +92,6 @@ struct ConnectionsView: View {
         }
     }
 
-    /// We don't track per-connection liveness from the kernel — every visible
-    /// row is treated as "live" per the spec.
-    private var activeCount: Int { rows.count }
-
     private var selectedConnection: MihomoConnection? {
         guard let id = selectedID else { return nil }
         if let live = store.connections.first(where: { $0.id == id }) {
@@ -106,7 +105,7 @@ struct ConnectionsView: View {
         return !store.connections.contains(where: { $0.id == id })
     }
 
-    private var toolbar: some View {
+    private func toolbar(rows: [MihomoConnection]) -> some View {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
@@ -136,7 +135,7 @@ struct ConnectionsView: View {
                     .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
             )
 
-            Text("\(activeCount) / \(rows.count)")
+            Text("\(rows.count) / \(rows.count)")
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .monospacedDigit()
@@ -167,7 +166,7 @@ struct ConnectionsView: View {
     }
 
     @ViewBuilder
-    private var cardArea: some View {
+    private func cardArea(rows: [MihomoConnection]) -> some View {
         // SwiftUI flexible layout drifts toward 50/50 once both sides have
         // maxWidth: .infinity, so we measure with a GeometryReader.
         GeometryReader { geo in
@@ -181,7 +180,7 @@ struct ConnectionsView: View {
                 : geo.size.width
 
             HStack(spacing: gap) {
-                card
+                card(rows: rows)
                     .frame(width: cardW)
 
                 if showInspector, let conn = selectedConnection {
@@ -205,7 +204,7 @@ struct ConnectionsView: View {
     }
 
     @ViewBuilder
-    private var card: some View {
+    private func card(rows: [MihomoConnection]) -> some View {
         ChCard(padding: 0) {
             if kernel.apiClient == nil {
                 emptyState(title: "内核未启动",
@@ -223,7 +222,7 @@ struct ConnectionsView: View {
                                        system: "link.circle",
                                        subtitle: "上网后被代理的连接会出现在这里。")
                         } else {
-                            rowList(widths: widths)
+                            rowList(rows: rows, widths: widths)
                         }
                     }
                 }
@@ -260,17 +259,15 @@ struct ConnectionsView: View {
             .frame(maxWidth: .infinity, alignment: alignment)
     }
 
-    private func rowList(widths: ConnectionsColumnWidths) -> some View {
-        // Cache once per body — avoids re-reading the computed property six
-        // times below. ForEach + LazyVStack only materialises visible rows.
-        let visible = rows
+    private func rowList(rows: [MihomoConnection],
+                         widths: ConnectionsColumnWidths) -> some View {
         let anonEnabled = anon.enabled
         let currentSelection = selectedID
         let liveRates = store.rates
 
         return ScrollView(.vertical, showsIndicators: true) {
             LazyVStack(spacing: 0) {
-                ForEach(visible) { row in
+                ForEach(rows) { row in
                     ConnectionRow(
                         row: row,
                         widths: widths,
