@@ -282,7 +282,9 @@ struct MenubarContent: View {
 
     private func showMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
-        for w in NSApp.windows where w.canBecomeKey {
+        // Same NSPanel filter as applicationShouldHandleReopen: skip the
+        // menubar popover's panel, only target the main scene window.
+        for w in NSApp.windows where w.canBecomeKey && !(w is NSPanel) {
             w.makeKeyAndOrderFront(nil)
             return
         }
@@ -554,28 +556,46 @@ struct MenubarIconName {
 
 // MARK: - Menubar status bar label (icon + ↑↓ speeds)
 
-/// macOS 菜单栏状态项：盾形图标 + 实时上下行速率，单行横排。
-/// 字号走 NSFont menuBarFont 体感（11pt）确保看得清；内核没跑时只显图标。
+/// macOS 菜单栏状态项：盾形图标 + 实时上下行速率。
+/// 拆成 icon + speed 两个叶子：speed 每秒变（订阅 TrafficStore），icon 仅
+/// kernel/systemProxy 状态变时刷。图标和文字各自有固定 frame，文字行的字符
+/// 数变化只影响 speed leaf 内部，不再带着 icon 一起跳。
 struct MenubarLabel: View {
+    var body: some View {
+        HStack(spacing: 5) {
+            MenubarLabelIcon()
+            MenubarLabelSpeed()
+        }
+    }
+}
+
+/// Icon-only leaf — only redraws when kernel readiness flips.
+private struct MenubarLabelIcon: View {
     @Environment(KernelController.self) private var kernel
-    @Environment(SystemProxyController.self) private var systemProxy
+
+    var body: some View {
+        Image("MenubarIcon")
+            .resizable()
+            .interpolation(.high)
+            .frame(width: 16, height: 16)
+            .opacity(kernel.apiClient == nil ? 0.45 : 1.0)
+    }
+}
+
+/// Speed-only leaf — subscribes to TrafficStore, ticks at 1Hz; the parent
+/// MenubarLabel and the icon next to it stay still. A fixed monospaced
+/// frame width keeps the menubar item from horizontally dancing as digits
+/// roll over (e.g. "↑0" → "↑1.2M").
+private struct MenubarLabelSpeed: View {
+    @Environment(KernelController.self) private var kernel
     @Environment(TrafficStore.self) private var traffic
 
     var body: some View {
-        HStack(spacing: 5) {
-            // Custom-branded raster icon (rendered as-is with full color so
-            // the red+gold 中華 mark stays recognizable). Slight desaturation
-            // when offline so the user gets state at a glance.
-            Image("MenubarIcon")
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 16, height: 16)
-                .opacity(kernel.apiClient == nil ? 0.45 : 1.0)
-            if kernel.apiClient != nil {
-                Text("↑\(short(traffic.current?.upBps ?? 0)) ↓\(short(traffic.current?.downBps ?? 0))")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .monospacedDigit()
-            }
+        if kernel.apiClient != nil {
+            Text("↑\(short(traffic.current?.upBps ?? 0)) ↓\(short(traffic.current?.downBps ?? 0))")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+                .frame(width: 90, alignment: .leading)
         }
     }
 

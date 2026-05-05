@@ -183,8 +183,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         if !hasVisibleWindows {
-            for w in NSApp.windows where w.canBecomeKey {
+            // Filter out the MenuBarExtra(.window)'s NSPanel — `canBecomeKey`
+            // is true for it, and calling makeKeyAndOrderFront on the panel
+            // is what auto-popped the menubar popup when the user clicked
+            // the Dock icon.
+            for w in NSApp.windows where w.canBecomeKey && !(w is NSPanel) {
                 w.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
                 return true
             }
             // No window — synthesize one. WindowGroup will recreate on activation.

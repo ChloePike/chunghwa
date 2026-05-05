@@ -351,8 +351,8 @@ final class KernelController {
     private func startConnectionsStream(_ stream: MihomoStreamClient) -> Task<Void, Never> {
         let store = self.connectionsStore
         return Task {
-            for await snapshot in await stream.connectionsEvents() {
-                store.apply(snapshot)
+            for await frame in await stream.connectionsEvents() {
+                store.apply(frame: frame)
             }
         }
     }

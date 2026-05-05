@@ -40,8 +40,13 @@ actor MihomoStreamClient {
         events(path: "/memory")
     }
 
-    func connectionsEvents() -> AsyncStream<MihomoConnectionsSnapshot> {
-        events(path: "/connections")
+    /// Connections frames are emitted as raw `Data` so the consumer can drop
+    /// superseded frames without paying for the (expensive) JSON decode.
+    /// Mihomo's /connections endpoint can fire multiple times per second when
+    /// connections come and go; ConnectionsStore coalesces at 250 ms, so we
+    /// only need to decode the latest unread frame within each window.
+    func connectionsEvents() -> AsyncStream<Data> {
+        rawEvents(path: "/connections")
     }
 
     private func events<E: Decodable & Sendable>(
@@ -68,6 +73,43 @@ actor MihomoStreamClient {
                             if let event = try? decoder.decode(E.self, from: data) {
                                 continuation.yield(event)
                             }
+                        }
+                    } catch {
+                        log.warning("ws \(path, privacy: .public) closed: \(String(describing: error), privacy: .public)")
+                    }
+                    ws.cancel(with: .goingAway, reason: nil)
+                    if Task.isCancelled { break }
+                    attempt += 1
+                    let backoffNs = UInt64(min(8, 1 << min(attempt, 3))) * 1_000_000_000
+                    try? await Task.sleep(nanoseconds: backoffNs)
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Same reconnect-forever envelope as `events`, but yields the raw frame
+    /// bytes so a downstream consumer that coalesces (e.g. ConnectionsStore)
+    /// can skip JSON decoding for frames it's about to discard.
+    private func rawEvents(path: String, query: [URLQueryItem] = []) -> AsyncStream<Data> {
+        let url = streamURL(path: path, query: query)
+        let request = makeRequest(url: url)
+        let session = self.session
+        let log = self.log
+        return AsyncStream<Data> { continuation in
+            let task = Task {
+                var attempt = 0
+                while !Task.isCancelled {
+                    let ws = session.webSocketTask(with: request)
+                    ws.resume()
+                    log.debug("ws connected \(path, privacy: .public) attempt=\(attempt, privacy: .public)")
+                    attempt = 0
+                    do {
+                        while !Task.isCancelled {
+                            let message = try await ws.receive()
+                            let frame = try data(from: message)
+                            continuation.yield(frame)
                         }
                     } catch {
                         log.warning("ws \(path, privacy: .public) closed: \(String(describing: error), privacy: .public)")

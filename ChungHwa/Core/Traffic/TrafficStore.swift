@@ -18,6 +18,11 @@ final class TrafficStore {
     private(set) var totalDown: Int = 0
     private(set) var memoryInUse: Int = 0
     private(set) var memoryLimit: Int = 0
+    /// Running max over the rolling sample window. Stored so per-second leaf
+    /// views (PeakSubStat, etc.) don't pay an O(n) `samples.map.max()` on every
+    /// re-eval, and so they only invalidate when the peak actually changes.
+    private(set) var peakUpCached: Int = 0
+    private(set) var peakDownCached: Int = 0
 
     let capacity: Int
     private var nextID: UInt64 = 0
@@ -40,16 +45,31 @@ final class TrafficStore {
     }
 
     var current: Sample? { samples.last }
-    var peakUp: Int { samples.map(\.upBps).max() ?? 0 }
-    var peakDown: Int { samples.map(\.downBps).max() ?? 0 }
+    var peakUp: Int { peakUpCached }
+    var peakDown: Int { peakDownCached }
 
     func append(_ sample: MihomoTrafficSample, at date: Date = Date()) {
         nextID &+= 1
         let s = Sample(id: nextID, timestamp: date, upBps: sample.up, downBps: sample.down)
+        let trimmed: Bool
         if samples.count >= capacity {
             samples.removeFirst(samples.count - capacity + 1)
+            trimmed = true
+        } else {
+            trimmed = false
         }
         samples.append(s)
+
+        // Maintain the running peak. The append-only fast-path is just
+        // max(prev, new); we only do the O(n) recompute when trimming might
+        // have removed the current peak (and even then, only if the peak
+        // actually drops, so the published value is stable).
+        if trimmed {
+            recomputePeaks()
+        } else {
+            if sample.up   > peakUpCached   { peakUpCached   = sample.up }
+            if sample.down > peakDownCached { peakDownCached = sample.down }
+        }
 
         // Accumulate totals in shadow state; only republish on the flush
         // cadence so header text doesn't drag a re-render every second.
@@ -57,6 +77,17 @@ final class TrafficStore {
         pendingTotalDown &+= sample.down
         totalsDirty = true
         scheduleTotalsFlush(now: date)
+    }
+
+    private func recomputePeaks() {
+        var maxUp = 0
+        var maxDown = 0
+        for s in samples {
+            if s.upBps   > maxUp   { maxUp   = s.upBps }
+            if s.downBps > maxDown { maxDown = s.downBps }
+        }
+        if maxUp   != peakUpCached   { peakUpCached   = maxUp }
+        if maxDown != peakDownCached { peakDownCached = maxDown }
     }
 
     private func scheduleTotalsFlush(now: Date) {
@@ -109,5 +140,7 @@ final class TrafficStore {
         totalDown = 0
         memoryInUse = 0
         memoryLimit = 0
+        peakUpCached = 0
+        peakDownCached = 0
     }
 }

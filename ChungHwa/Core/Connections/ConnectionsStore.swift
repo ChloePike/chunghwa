@@ -17,6 +17,12 @@ struct ConnectionRate: Sendable, Equatable {
 @MainActor
 final class ConnectionsStore {
     private(set) var connections: [MihomoConnection] = []
+    /// Cached `connections.count`. Exposed as its own observable property so
+    /// leaves that only need a count (StatusBar, MenubarLiveStats,
+    /// ConnectionCountStat) don't subscribe to the full connections array
+    /// — which would invalidate them every time a byte counter ticks even
+    /// when the count itself is unchanged.
+    private(set) var connectionCount: Int = 0
     private(set) var downloadTotal: Int = 0
     private(set) var uploadTotal: Int = 0
     /// Per-connection bytes/second derived from the last two commits.
@@ -31,29 +37,32 @@ final class ConnectionsStore {
     /// list feeling live, while collapsing bursts into a single SwiftUI redraw.
     private static let coalesceWindow: TimeInterval = 0.25
 
-    @ObservationIgnored private var pendingSnapshot: MihomoConnectionsSnapshot?
+    @ObservationIgnored private var pendingFrame: Data?
     @ObservationIgnored private var coalesceTask: Task<Void, Never>?
     @ObservationIgnored private var lastCommit: Date = .distantPast
     /// Last committed (upload, download) byte totals per connection id.
     /// Used to diff against the next commit to derive bytes/second.
     @ObservationIgnored private var lastTotals: [String: (up: Int, down: Int)] = [:]
+    @ObservationIgnored private let decoder = JSONDecoder()
 
-    func apply(_ snapshot: MihomoConnectionsSnapshot) {
+    /// Accept a raw /connections frame. We deliberately *do not* decode here —
+    /// mihomo can fire several frames per second and the coalesce window means
+    /// most get superseded; decoding the bytes that are about to be discarded
+    /// is wasted CPU. We stash the latest frame and decode at commit time.
+    func apply(frame: Data) {
         let now = Date()
         let elapsed = now.timeIntervalSince(lastCommit)
         if elapsed >= Self.coalesceWindow {
-            // Far enough past the last publish — commit immediately and drop
-            // any in-flight deferred snapshot (this one supersedes it).
             coalesceTask?.cancel()
             coalesceTask = nil
-            pendingSnapshot = nil
-            commit(snapshot, at: now)
+            pendingFrame = nil
+            commit(frame: frame, at: now)
             return
         }
 
-        // Within the coalesce window: stash the freshest snapshot and
+        // Within the coalesce window: stash the freshest frame and
         // (re)schedule a flush at lastCommit + window.
-        pendingSnapshot = snapshot
+        pendingFrame = frame
         coalesceTask?.cancel()
         let delay = Self.coalesceWindow - elapsed
         let nanos = UInt64(max(0, delay) * 1_000_000_000)
@@ -65,10 +74,17 @@ final class ConnectionsStore {
     }
 
     private func flushPending() {
-        guard let snapshot = pendingSnapshot else { return }
-        pendingSnapshot = nil
+        guard let frame = pendingFrame else { return }
+        pendingFrame = nil
         coalesceTask = nil
-        commit(snapshot, at: Date())
+        commit(frame: frame, at: Date())
+    }
+
+    private func commit(frame: Data, at date: Date) {
+        guard let snapshot = try? decoder.decode(MihomoConnectionsSnapshot.self, from: frame) else {
+            return
+        }
+        commit(snapshot, at: date)
     }
 
     private func commit(_ snapshot: MihomoConnectionsSnapshot, at date: Date) {
@@ -113,7 +129,7 @@ final class ConnectionsStore {
     func reset() {
         coalesceTask?.cancel()
         coalesceTask = nil
-        pendingSnapshot = nil
+        pendingFrame = nil
         lastCommit = .distantPast
         connections = []
         downloadTotal = 0
