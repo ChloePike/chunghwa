@@ -38,3 +38,4 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 .claude/settings.local.json
+/docs/
