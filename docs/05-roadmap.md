@@ -70,7 +70,7 @@
 
 - [x] SQLite 数据层（`Core/Storage/Database.swift`，WAL + `synchronous=NORMAL`）替代 proxy-delays.json / geoip-cache.json / traffic-history.json，首次启动一次性导入旧 JSON 再删
 - [x] UserDefaults 单一事实源（`ChungHwa.MixedPort` / `ChungHwa.TunEnabled` / `ChungHwa.DNS.*` / `ChungHwa.CustomRules` / `ChungHwa.Advanced.*`），composer + 探针 + UI 都从同一处读
-- [x] 身份脱敏：subsystem `com.tzaigroup.chunghwa` → `org.clash.ChungHwa`，删 `DEVELOPMENT_TEAM` Z6WHGX32Q8，git 历史 author 全部改 Claude
+- [x] 身份脱敏：log subsystem 改成中性 `org.clash.ChungHwa`，删 `DEVELOPMENT_TEAM`，git 历史 author 全部改 Claude
 - [x] DMG 打包脚本 `scripts/make-dmg.sh`（ad-hoc 签名、UDZO 压缩、`/Applications` 拖装符号链接）
 - [x] GitHub Actions release workflow：tag push (`v*`) → 三 DMG (universal / arm64 / x86_64) + SHA256SUMS 自动挂到 Release
 - [x] CHANGELOG.md（Keep a Changelog 格式）
@@ -86,7 +86,7 @@
 - [ ] **Web Dashboard 内嵌**——用户自己开 yacd / metacubexd 接同一个 External Controller 即可
 - [ ] **公证**——自用版本不上架 / 不发行，不付 $99/yr Apple Developer Program；下载者第一次开需要 `xattr -dr com.apple.quarantine`
 - [ ] **沙盒化**——要把 mihomo 拆成 SMAppService daemon 跑，整个生命周期模型重写，自用版本不值
-- [ ] **TUN 二进制挪到 `/Library/PrivilegedHelperTools/com.tzaigroup.chunghwa.mihomo`**——目前 setuid 直接打在当前 active mihomo 上够用；未来要做发行版可以补
+- [ ] **TUN 二进制挪到 `/Library/PrivilegedHelperTools/`**——目前 setuid 直接打在当前 active mihomo 上够用；未来要做发行版可以补
 - [ ] **商业化 / 节点市场 / 自研协议**——永久 non-goal
 
 ## 还可以做的（feature 请求池，未排期）
