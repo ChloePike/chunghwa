@@ -1,21 +1,16 @@
 import SwiftUI
 
-/// Native window-toolbar content for ChungHwa. Hosts:
-///   - the title (selected sidebar tab, serif) on the leading side
-///   - reload + bell + profile pill + mode segmented + chip cluster on the
-///     trailing side
-///
-/// On macOS 26 Tahoe the Liquid Glass title bar fuses traffic lights with
-/// these toolbar items in a single row, so we no longer reproduce a custom
-/// 48pt bar inside the detail VStack.
+/// Window-toolbar content. Reload / bell / profile / mode / chip cluster on
+/// the trailing side. macOS 26's Liquid Glass title bar fuses traffic lights
+/// with these items in a single row, so we don't reproduce a 48pt bar inside
+/// the detail VStack.
 struct ChungHwaToolbar: ToolbarContent {
     let title: String
     var onSwitchToProfiles: (() -> Void)? = nil
 
     var body: some ToolbarContent {
-        // The window's native title (via .navigationTitle) carries the tab
-        // name; we don't add a custom serif title item here so the two
-        // don't visually stack.
+        // .navigationTitle carries the tab name — adding a custom title item
+        // here would visually stack with it.
         ToolbarItem(placement: .primaryAction) { ToolbarReload() }
         ToolbarItem(placement: .primaryAction) { ToolbarBell() }
         ToolbarItem(placement: .primaryAction) {
@@ -28,8 +23,6 @@ struct ChungHwaToolbar: ToolbarContent {
     }
 }
 
-// MARK: - title
-
 private struct ToolbarTitle: View {
     let title: String
 
@@ -40,8 +33,6 @@ private struct ToolbarTitle: View {
             .tracking(-0.2)
     }
 }
-
-// MARK: - individual toolbar items
 
 private struct ToolbarReload: View {
     @Environment(KernelController.self) private var kernel
@@ -216,11 +207,7 @@ private struct ToolbarAnonymous: View {
     }
 }
 
-// MARK: - icon button (reload / bell)
-
-/// Borderless 28pt icon button used by the reload + bell toolbar slots.
-/// Matches the visual weight of the chips' off-state (no fill, soft border on
-/// hover) without the chip badge.
+/// 28pt borderless icon button for the reload + bell toolbar slots.
 private struct IconButton: View {
     let symbol: String
     let help: String
@@ -258,8 +245,6 @@ private struct IconButton: View {
         .help(help)
     }
 }
-
-// MARK: - notifications popover
 
 private struct NotificationsPopover: View {
     let store: NotificationCenterStore

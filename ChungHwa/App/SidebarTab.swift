@@ -45,8 +45,7 @@ struct SidebarSection: Identifiable {
 }
 
 extension SidebarTab {
-    /// Sidebar layout, mirroring `design/src/app.jsx` Sidebar(). Settings is
-    /// the footer slot — not present in any section.
+    /// Settings is the footer slot — not present in any section.
     static let sections: [SidebarSection] = [
         .init(id: "main",          header: nil,             tabs: [.overview, .connections, .logs]),
         .init(id: "visualization", header: "可视化",          tabs: [.topology]),

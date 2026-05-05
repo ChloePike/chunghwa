@@ -1,17 +1,9 @@
 import AppKit
 import SwiftUI
 
-// MARK: - AdvancedView
-
-/// Advanced settings tab — "Bone & Brass on Patina" design.
-///
-/// All values are persisted via `@AppStorage` under the
-/// `ChungHwa.Advanced.*` namespace. Two of them — `LogLevel` and
-/// `LANInbound` — are also pushed to mihomo's `/configs` endpoint at
-/// runtime (via `ConfigStore`); the rest remain local-only and require
-/// a kernel restart to take effect.
-///
-/// Mirrors `AdvancedScreen` in `design/src/app.jsx` (lines 1245-1408).
+/// Advanced settings tab. `@AppStorage` under `ChungHwa.Advanced.*`.
+/// `LogLevel` + `LANInbound` push to mihomo's `/configs` at runtime via
+/// `ConfigStore`; everything else is local-only and needs a kernel restart.
 struct AdvancedView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(ConfigStore.self)      private var config
@@ -114,8 +106,6 @@ struct AdvancedView: View {
             RoutingEditor()
         }
     }
-
-    // MARK: - Sections
 
     private var kernelLogs: some View {
         AdvSection(title: "内核日志") {
@@ -377,8 +367,6 @@ struct AdvancedView: View {
         }
     }
 
-    // MARK: - Mutations
-
     private func addIp() {
         let trimmed = newIp.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
@@ -389,8 +377,6 @@ struct AdvancedView: View {
         // bypass takes effect immediately (no need to toggle off/on).
         systemProxy.reapply()
     }
-
-    // MARK: - Bypass persistence
 
     private static let bypassDefaultsKey = "ChungHwa.Advanced.BypassList"
 
@@ -418,8 +404,6 @@ struct AdvancedView: View {
         }
     }
 }
-
-// MARK: - Bypass entry model
 
 private struct BypassEntry: Identifiable, Codable, Hashable {
     enum Tag: String, Codable {
@@ -450,11 +434,8 @@ private struct BypassEntry: Identifiable, Codable, Hashable {
     var locked: Bool
 }
 
-// MARK: - FootnoteRow
-
-/// Tiny faint caption that sits under a row inside an `AdvSection`. Lives
-/// inside the section card and gets a thin top divider, matching the
-/// hairline rule between regular rows.
+/// Faint caption under a row inside an `AdvSection`, with a hairline top
+/// divider matching the rule between regular rows.
 private struct FootnoteRow: View {
     let text: String
 
@@ -472,8 +453,6 @@ private struct FootnoteRow: View {
         }
     }
 }
-
-// MARK: - AdvSection
 
 private struct AdvSection<Content: View>: View {
     let title: String
@@ -501,8 +480,6 @@ private struct AdvSection<Content: View>: View {
         }
     }
 }
-
-// MARK: - AdvRow
 
 private struct AdvRow<Trailing: View>: View {
     let icon: String?
@@ -565,8 +542,6 @@ private struct AdvRow<Trailing: View>: View {
     }
 }
 
-// MARK: - Switch
-
 private struct Switch: View {
     @Binding var isOn: Bool
     var color: Color = ChungHwa.Palette.patina
@@ -599,12 +574,8 @@ private struct Switch: View {
     }
 }
 
-// MARK: - Stepper (real dropdown picker)
-
-/// Actually a popup picker — keeps the original name to avoid touching the
-/// call sites. Earlier this was a click-to-cycle button which gave no way to
-/// jump straight to a specific option; now it's a Menu with `.fixedSize`
-/// chrome matching the design.
+/// Popup picker — keeps the `Stepper` name to avoid touching call sites.
+/// Was a click-to-cycle button; now a Menu so users can jump to any option.
 private struct Stepper: View {
     @Binding var value: String
     let options: [(value: String, label: String)]
@@ -650,8 +621,6 @@ private struct Stepper: View {
         .fixedSize()
     }
 }
-
-// MARK: - TextInputField
 
 private struct TextInputField<Trailing: View>: View {
     @Binding var text: String
@@ -707,8 +676,6 @@ private struct TextInputField<Trailing: View>: View {
     }
 }
 
-// MARK: - IpChip
-
 private struct IpChip: View {
     let entry: BypassEntry
     let onDelete: () -> Void
@@ -759,8 +726,6 @@ private struct IpChip: View {
         }
     }
 }
-
-// MARK: - IconButton
 
 private struct IconButton: View {
     let systemName: String

@@ -1,10 +1,7 @@
 import SwiftUI
 
-// MARK: - RoutingEditor
-
-/// Sheet for editing the user's custom routing rules. Each row holds a match
-/// type + value pair and a target. Active across all profiles — composer
-/// splices these in ABOVE the subscription's own rules so they match first.
+/// Custom-routing-rules editor. Composer splices these in ABOVE the
+/// subscription's own rules so they match first.
 struct RoutingEditor: View {
     @Environment(ConfigStore.self) private var config
     @Environment(ProxyStore.self) private var proxyStore
@@ -33,8 +30,6 @@ struct RoutingEditor: View {
             self.rows = config.customRules.map { Row(from: $0) }
         }
     }
-
-    // MARK: - Sections
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -150,8 +145,6 @@ struct RoutingEditor: View {
         }
     }
 
-    // MARK: - Save
-
     private var groupNames: [String] {
         proxyStore.groupOrder
     }
@@ -172,8 +165,6 @@ struct RoutingEditor: View {
         dismiss()
     }
 }
-
-// MARK: - Row state
 
 private struct Row: Identifiable, Equatable {
     let id = UUID()
@@ -231,8 +222,6 @@ private enum RuleType: String, CaseIterable, Identifiable {
         }
     }
 }
-
-// MARK: - RuleRow
 
 private struct RuleRow: View {
     @Binding var row: Row
@@ -373,8 +362,6 @@ private struct RuleRow: View {
         .fixedSize()
     }
 }
-
-// MARK: - Button styles
 
 private struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

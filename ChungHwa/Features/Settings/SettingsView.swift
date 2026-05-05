@@ -1,11 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Settings tab — "Bone & Brass on Patina" reskin.
-///
-/// Profiles management lives in its own `ProfilesView` (see
-/// `Features/Profiles/`). This view focuses on app-level metadata and the
-/// kernel binary lifecycle.
+/// Settings tab — app-level metadata and kernel binary lifecycle. Profile
+/// management is in `Features/Profiles/`.
 struct SettingsView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(KernelBinaryResolver.self) private var resolver
@@ -611,8 +608,6 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Source badge
-
 private struct SourceBadge: View {
     let source: KernelBinarySource
 
@@ -643,8 +638,6 @@ private struct SourceBadge: View {
     }
 }
 
-// MARK: - "New" badge
-
 private struct NewBadge: View {
     var body: some View {
         Text("新版")
@@ -666,8 +659,6 @@ private struct NewBadge: View {
             )
     }
 }
-
-// MARK: - Buttons
 
 private struct BrassButton: View {
     let title: String

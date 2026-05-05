@@ -1,9 +1,7 @@
 import Charts
 import SwiftUI
 
-// MARK: - Card
-
-/// Plain Bone & Brass card. Use `ChCardWithHeader` if the card has a title row.
+/// Plain card. Use `ChCardWithHeader` for cards with a title row.
 struct ChCard<Content: View>: View {
     let content: Content
     var padding: CGFloat = 14
@@ -25,7 +23,7 @@ struct ChCard<Content: View>: View {
 }
 
 /// Card with a title-row at the top (icon + title + right slot) and content
-/// underneath. Mirrors `Card` from `design/src/app.jsx`.
+/// underneath.
 struct ChCardWithHeader<Right: View, Content: View>: View {
     let title: String
     let systemImage: String?
@@ -72,8 +70,6 @@ struct ChCardWithHeader<Right: View, Content: View>: View {
         .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
     }
 }
-
-// MARK: - Stats
 
 /// Big serif stat with a small icon-label above. Used in Overview cards.
 struct ChStat: View {
@@ -140,14 +136,10 @@ extension ChSubStat where Value == Text {
     }
 }
 
-// MARK: - Dot
-
-/// Status dot with optional pulse. The pulse is driven by Core Animation via
-/// `.animation(...).repeatForever`, NOT a TimelineView — TimelineView forces a
-/// SwiftUI body re-eval per frame which costs a measurable ~20% CPU app-wide
-/// even with paused-when-offscreen, because layout recomputes anyway. Core
-/// Animation handles opacity interpolation in the render server with no body
-/// re-evaluation.
+/// Status dot with optional pulse. Pulse is Core-Animation-driven — a
+/// TimelineView forces a SwiftUI body re-eval per frame (~20% CPU app-wide
+/// even when offscreen, because layout recomputes anyway). Core Animation
+/// handles opacity interpolation in the render server with no body re-eval.
 struct ChDot: View {
     var color: Color = ChungHwa.Palette.patina
     var size: CGFloat = 6
@@ -169,8 +161,6 @@ struct ChDot: View {
             .onChange(of: pulse) { _, on in pulsing = on }
     }
 }
-
-// MARK: - Pill / Segmented
 
 /// Single rounded pill button. Used by `ChSeg` and freestanding buttons.
 struct ChPill<Label: View>: View {
@@ -224,13 +214,9 @@ struct ChSeg<Value: Hashable>: View {
     }
 }
 
-// MARK: - Sparkline (Swift Charts)
-
-/// Equatable so callers can `.equatable()` to short-circuit re-renders when
-/// the latest sample (and the count of samples) hasn't changed. Comparing
-/// the entire array on every body call would defeat the purpose; `count` +
-/// `last` is a near-free hash that catches every meaningful update from
-/// `TrafficStore.append`.
+/// Equatable so callers can `.equatable()` and short-circuit re-renders.
+/// Comparing the entire array would defeat the purpose; `count` + `last` is
+/// a near-free hash that catches every meaningful `TrafficStore.append`.
 struct ChSpark: View, Equatable {
     let values: [Double]
     var color: Color = ChungHwa.Palette.patina
@@ -260,11 +246,8 @@ struct ChSpark: View, Equatable {
     }
 }
 
-// MARK: - Anonymous mask
-
-/// Apply on any view containing identifying info (IPs, hostnames, process
-/// names). When anonymous mode is on, the view blurs and desaturates, and
-/// hovering briefly reveals — same UX as the design's `.ch-mask`.
+/// Apply on identifying info (IPs, hostnames, process names). Blurs +
+/// desaturates when anon mode is on; hover briefly reveals.
 extension View {
     func anonMask(_ enabled: Bool) -> some View {
         modifier(ChAnonMaskModifier(enabled: enabled))
@@ -284,8 +267,6 @@ private struct ChAnonMaskModifier: ViewModifier {
     }
 }
 
-// MARK: - Latency colour
-
 /// Standard latency tiering used by Proxies / Connections / Overview.
 enum ChLatency {
     static func color(_ ms: Int) -> Color {
@@ -296,8 +277,6 @@ enum ChLatency {
         }
     }
 }
-
-// MARK: - Byte / rate formatters
 
 enum ChFormat {
     static func bytes(_ b: Int) -> String {

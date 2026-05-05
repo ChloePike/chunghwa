@@ -1,10 +1,8 @@
 import AppKit
 import SwiftUI
 
-// MARK: - MenubarContent (rich SwiftUI popup, MenuBarExtraStyle.window)
-
-/// 中華 菜单栏弹出窗口。固定 280pt 宽，玻璃底 + 大圆角。
-/// 头部（live 流量）→ 快捷开关 → 出站模式 → per-group 节点 → 配置 → 设置 / 退出。
+/// 菜单栏弹出窗口。固定宽度 + 玻璃底；Live 流量 → 快捷开关 → 出站模式 →
+/// per-group 节点 → 配置 → 设置/退出。
 struct MenubarContent: View {
     @Environment(KernelController.self) private var kernel
     @Environment(SystemProxyController.self) private var systemProxy
@@ -52,10 +50,7 @@ struct MenubarContent: View {
         }
     }
 
-    // MARK: - Quick toggles row
-
     /// Three compact pills mirroring the toolbar chips: 系统代理 / TUN / 匿名.
-    /// Same on/off visual language as the OverviewView hero pills.
     private var quickToggleRow: some View {
         HStack(spacing: 6) {
             togglePill(
@@ -118,10 +113,7 @@ struct MenubarContent: View {
         .opacity(disabled ? 0.45 : 1)
     }
 
-    // MARK: - Mode section
-
-    /// Mode picker as a popup menu — click the right-side label to drop a
-    /// 3-option select.
+    /// Mode picker as a popup menu (right-side label drops a 3-option select).
     private var modeSection: some View {
         let kernelReady = kernel.apiClient != nil
         return HStack(spacing: 4) {
@@ -158,8 +150,6 @@ struct MenubarContent: View {
             }
         )
     }
-
-    // MARK: - Group section
 
     @ViewBuilder
     private var groupSection: some View {
@@ -216,8 +206,6 @@ struct MenubarContent: View {
         }
     }
 
-    // MARK: - Profile section
-
     private var profileSection: some View {
         ProfilePickerRow(
             profiles: profileStore.profiles,
@@ -228,8 +216,6 @@ struct MenubarContent: View {
             }
         )
     }
-
-    // MARK: - Footer section
 
     private var footerSection: some View {
         VStack(spacing: 0) {
@@ -274,8 +260,6 @@ struct MenubarContent: View {
         showMainWindow()
     }
 
-    // MARK: - Shared helpers
-
     private var sectionDivider: some View {
         Divider().opacity(0.3)
     }
@@ -291,15 +275,11 @@ struct MenubarContent: View {
     }
 }
 
-// MARK: - Notification placeholder
-
 extension Notification.Name {
     /// 菜单栏「检查内核更新」按下时发出。监听端（主窗口 Settings）暂未接入，
     /// 后续再补；不接也不会报错，只是按钮变成 no-op。
     static let chungHwaCheckKernelUpdate = Notification.Name("ChungHwa.CheckKernelUpdate")
 }
-
-// MARK: - Live stats strip
 
 /// Compact live-stat strip extracted as a leaf so the surrounding popover
 /// (group/profile menus etc.) does not re-evaluate when TrafficStore or
@@ -331,8 +311,6 @@ private struct MenubarLiveStats: View {
         .monospacedDigit()
     }
 }
-
-// MARK: - Row primitive
 
 /// 单行菜单项的显示标签：左 icon、中 title、右可选 trailing label + chevron。
 /// 点击高亮由父 Button/Menu 的 hover 渲染，但 .plain 不带高亮，于是我们在
@@ -381,8 +359,6 @@ private struct MenubarRowLabel: View {
         .onHover { hovering = $0 }
     }
 }
-
-// MARK: - Picker rows (left-side popovers)
 
 /// Tappable row for a switchable proxy group. Click → popover slides out the
 /// LEFT edge with a scrollable node list. The popover is its own NSPanel so
@@ -540,8 +516,6 @@ private struct PickerRow: View {
     }
 }
 
-// MARK: - Menubar icon (status-driven SF Symbol, unchanged from before)
-
 @MainActor
 struct MenubarIconName {
     static func current(kernel: KernelController, systemProxy: SystemProxyController) -> String {
@@ -553,8 +527,6 @@ struct MenubarIconName {
         }
     }
 }
-
-// MARK: - Menubar status bar label (icon + ↑↓ speeds)
 
 /// macOS 菜单栏状态项：盾形图标 + 实时上下行速率。
 /// 拆成 icon + speed 两个叶子：speed 每秒变（订阅 TrafficStore），icon 仅

@@ -1,15 +1,8 @@
 import SwiftUI
 
-// MARK: - Public screen
-
-/// Sankey-ish visualization of the active proxy chain:
-///
-///   GLOBAL  ──▶  group  ──▶  upstream
-///
-/// Path width and brass intensity track live connection counts pulled from
-/// `ConnectionsStore` — heavier paths read brighter, idle paths fade to the
-/// neutral line colour. The static `now` selection still shapes which legs
-/// exist, but visual emphasis is driven by traffic.
+/// Sankey-ish view of the active proxy chain (GLOBAL → group → upstream).
+/// Path width + brass intensity track live connection counts; idle paths
+/// fade to the neutral line colour.
 struct TopologyView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(ProxyStore.self) private var store
@@ -167,10 +160,8 @@ struct TopologyView: View {
     }
 }
 
-// MARK: - Activity
-
-/// Live connection counts pulled out of `ConnectionsStore`. Keyed by group /
-/// upstream name so the diagram can light up the heaviest paths.
+/// Live connection counts keyed by group / upstream name so the diagram
+/// can light up the heaviest paths.
 struct TopologyActivity {
     let groupCounts: [String: Int]
     let upstreamCounts: [String: Int]
@@ -180,10 +171,8 @@ struct TopologyActivity {
     func upstream(_ name: String) -> Int { upstreamCounts[name] ?? 0 }
 }
 
-// MARK: - Model
-
-/// Pre-computed positions and links for the diagram. Doing this once outside
-/// of the Canvas/overlay layout keeps both branches in lockstep.
+/// Pre-computed positions and links for the diagram. Doing this once
+/// outside of the Canvas/overlay layout keeps both branches in lockstep.
 private struct TopologyModel {
     struct Node: Identifiable, Hashable {
         enum Kind: Hashable { case root, group, upstream }
@@ -374,8 +363,6 @@ private struct TopologyModel {
     }
 }
 
-// MARK: - Activity → visual mapping
-
 /// Brass colour and stroke width derived from a connection count. Keeps
 /// links readable when N=0 (subtle line) and saturates at high N so a
 /// single dominant path doesn't blow out.
@@ -392,8 +379,6 @@ private enum TopoStyle {
         return 1.2 + CGFloat(bonus)
     }
 }
-
-// MARK: - Diagram
 
 private struct TopologyDiagram: View {
     let model: TopologyModel
@@ -464,8 +449,6 @@ private struct TopologyDiagram: View {
         .allowsHitTesting(false)
     }
 }
-
-// MARK: - Node card
 
 private struct NodeCard: View {
     let node: TopologyModel.Node
@@ -586,12 +569,9 @@ private struct NodeCard: View {
     }
 }
 
-// MARK: - Card chrome
-
-/// Bone & Brass card surface. The brass accent now keys off `hasActivity`
-/// (live connections flowing through the node) rather than just `active`
-/// (group has a `now`). The root card passes `active: true` to keep its
-/// permanent brass treatment regardless of traffic.
+/// Card surface. Brass accent keys off `hasActivity` (live connections),
+/// not `active` (group has a `now`); the root card passes `active: true`
+/// to keep its permanent brass treatment regardless of traffic.
 private struct CardChrome: ViewModifier {
     /// True for the root card (always brass). Group/upstream cards pass
     /// `false` and let `hasActivity` decide the accent.

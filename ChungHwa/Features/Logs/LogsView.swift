@@ -286,8 +286,6 @@ struct LogsView: View {
     }
 }
 
-// MARK: - Row
-
 private struct LogRow: View {
     let line: LogLine
     let query: String

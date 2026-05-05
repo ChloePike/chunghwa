@@ -1,9 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// "Bone & Brass on Patina" — see `design/src/app.jsx` for the source of truth
-/// on tokens. Keep this file in lockstep with the JSX `T(...)` and `C` tables
-/// so the SwiftUI surface tracks the design.
+/// Design tokens for the "Bone & Brass on Patina" palette.
 enum ChungHwa {
     enum Palette {
         // ── Brand constants (do not change with theme) ───────────────────
@@ -50,8 +48,6 @@ enum ChungHwa {
             .system(size: size, weight: weight, design: .monospaced)
         }
     }
-
-    // MARK: - color helpers
 
     private static func hex(_ rgb: UInt32, alpha: Double = 1) -> Color {
         let r = Double((rgb >> 16) & 0xFF) / 255

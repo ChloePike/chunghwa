@@ -1,11 +1,7 @@
 import SwiftUI
 
-/// Bone & Brass on Patina reskin of the Rules screen.
-///
-/// One `ChCard` wrapping a 5-column table (#, TYPE, MATCH, ACTION, HITS) with a
-/// search input + refresh button toolbar above. If the running config declares
-/// rule-providers, a thin banner above the card lists them with an "Update"
-/// button per row.
+/// Rules tab — 5-column table (#, TYPE, MATCH, ACTION, HITS) with a search/
+/// refresh toolbar. Rule-providers, if any, surface in a banner above the card.
 struct RulesView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(RuleStore.self) private var store
@@ -351,8 +347,6 @@ struct RulesView: View {
         .padding(.horizontal, 24)
     }
 
-    // MARK: - Icon button (matches design's btnGhost 28×28)
-
     private func iconButton(systemName: String,
                             size: CGFloat,
                             action: @escaping () -> Void) -> some View {
@@ -424,7 +418,7 @@ private struct RuleRowView: View {
         )
     }
 
-    /// Map mihomo's rule kinds onto the Bone & Brass palette so the table
+    /// Map mihomo's rule kinds onto the palette so the table
     /// reads at a glance.
     private func typeColor(_ type: String) -> Color {
         switch type {
