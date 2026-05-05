@@ -75,6 +75,50 @@ jobs:
           cat SHA256SUMS.txt
           ls -lh
 
+      - name: Build release notes from CHANGELOG.md
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Extract the `## [VERSION] — date` section out of CHANGELOG.md.
+          # Awk runs until the next `## [` header.
+          notes=$(awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (started) exit
+              if ($0 ~ "^## \\[" ver "\\]") { started = 1; next }
+            }
+            started { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' | awk 'BEGIN{n=0} {a[n++]=$0} END{
+            # trim trailing blank lines
+            while (n>0 && a[n-1] ~ /^[[:space:]]*$/) n--
+            for (i=0; i<n; i++) print a[i]
+          }')
+
+          {
+            echo "## ChungHwa ${GITHUB_REF_NAME}"
+            echo
+            if [[ -n "$notes" ]]; then
+              echo "$notes"
+              echo
+            fi
+            echo "### Install"
+            echo
+            echo '```sh'
+            echo "brew tap chloepike/chunghwa"
+            echo "brew install --cask chunghwa"
+            echo '```'
+            echo
+            echo "Or grab a DMG below. First open: right-click → Open, or"
+            echo
+            echo '```sh'
+            echo "xattr -dr com.apple.quarantine /Applications/ChungHwa.app"
+            echo '```'
+            echo
+            echo "Verify with \`shasum -a 256 ChungHwa-*.dmg\` against SHA256SUMS.txt."
+          } > build/RELEASE_NOTES.md
+          echo "--- composed release notes ---"
+          cat build/RELEASE_NOTES.md
+
       - name: Upload artifact (always, even on workflow_dispatch)
         uses: actions/upload-artifact@v4
         with:
@@ -93,16 +137,4 @@ jobs:
             build/SHA256SUMS.txt
           draft: false
           prerelease: false
-          generate_release_notes: true
-          body: |
-            ## ChungHwa ${{ github.ref_name }}
-
-            未签名构建，自用版。第一次打开如果被 Gatekeeper 拦，运行：
-
-            ```
-            xattr -dr com.apple.quarantine /Applications/ChungHwa.app
-            ```
-
-            或在 Finder 里右键 → 打开。
-
-            校验：`shasum -a 256 ChungHwa-*.dmg` 比对 SHA256SUMS.txt。
+          body_path: build/RELEASE_NOTES.md
