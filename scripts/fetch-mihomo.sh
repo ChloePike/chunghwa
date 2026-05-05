@@ -17,10 +17,22 @@ OUT_DIR="${MIHOMO_OUT_DIR:-$PROJECT_DIR/Vendor/mihomo}"
 OUT_BIN="$OUT_DIR/mihomo"
 OUT_VER="$OUT_DIR/version.txt"
 
+# Authenticate API requests when a GitHub token is in env. CI runners
+# share an outbound IP, so anonymous calls hit the 60/hr rate limit
+# almost immediately and api.github.com starts returning 403. With
+# GITHUB_TOKEN the limit jumps to 5000/hr.
+CURL_AUTH=()
+TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+if [[ -n "$TOKEN" ]]; then
+  CURL_AUTH=(-H "Authorization: Bearer $TOKEN")
+fi
+
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
   echo "→ querying latest mihomo release tag…"
-  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+  VERSION=$(curl -fsSL "${CURL_AUTH[@]}" \
+      -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/$REPO/releases/latest" \
     | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
   if [[ -z "$VERSION" ]]; then
     echo "✗ failed to resolve latest tag" >&2
@@ -43,7 +55,7 @@ download_arch () {
   local asset="mihomo-darwin-${arch}-${VERSION}.gz"
   local url="https://github.com/$REPO/releases/download/$VERSION/$asset"
   echo "→ downloading $asset"
-  curl -fL --progress-bar -o "$TMP/$asset" "$url"
+  curl -fL --progress-bar "${CURL_AUTH[@]}" -o "$TMP/$asset" "$url"
   gunzip -k "$TMP/$asset"
   mv "$TMP/mihomo-darwin-${arch}-${VERSION}" "$TMP/mihomo-${arch}"
   chmod +x "$TMP/mihomo-${arch}"
