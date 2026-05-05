@@ -1,0 +1,90 @@
+name: Bug report
+description: Something is broken, crashing, or rendering wrong data.
+title: "[bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file this. A focused reproduction
+        is worth more than a long description.
+
+        **Don't paste real subscription URLs, secrets, or your full
+        `config.yaml`** — those leak credentials. Trim or redact first.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What went wrong
+      description: A crisp sentence or two.
+      placeholder: |
+        After enabling TUN, every connection in the Connections grid
+        shows "DNS resolve failed".
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Numbered list. Mention which profile (default vs subscription) and whether system proxy / TUN are on.
+      placeholder: |
+        1. Launch ChungHwa
+        2. Profiles → import yaml from URL X (the yaml has its own dns: block)
+        3. Toolbar → toggle TUN on
+        4. Open Connections tab — every row shows "DNS resolve failed"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      placeholder: Connections should resolve normally; mihomo should hand back fake-IPs.
+
+  - type: input
+    id: device
+    attributes:
+      label: Mac / macOS / app version
+      placeholder: M3 MacBook Pro · macOS 26.4 · ChungHwa 0.1.0 (commit fd17496)
+
+  - type: input
+    id: mihomo
+    attributes:
+      label: mihomo version
+      description: From Settings → About, or About panel. e.g. v1.19.24.
+
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Active profile shape
+      options:
+        - Default profile (DIRECT-only)
+        - Subscription / yaml WITH its own `dns:` block
+        - Subscription / yaml WITHOUT a `dns:` block
+        - Hand-written yaml
+
+  - type: dropdown
+    id: kernel-mode
+    attributes:
+      label: Kernel mode at the time
+      multiple: true
+      options:
+        - System proxy ON
+        - TUN ON
+        - kernel running as setuid root
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console / log lines
+      description: |
+        Run this to grab the recent kernel + app logs and paste here:
+
+        ```
+        log show --predicate 'subsystem == "org.clash.ChungHwa"' --last 5m --info --debug --style compact
+        ```
+
+        If the app crashed, also attach the relevant section of the macOS
+        crash report.
+      render: shell

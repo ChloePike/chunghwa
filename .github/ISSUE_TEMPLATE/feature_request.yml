@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose a new capability, screen, or polish.
+title: "[feat] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve
+      description: Describe the user pain first, before jumping to a solution.
+      placeholder: |
+        I want a per-app proxy override (always force certain processes
+        to DIRECT regardless of the rule list).
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Screens, controls, flow. Rough sketches / screenshots welcome.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the app does this touch? (picks a label for you)
+      multiple: true
+      options:
+        - overview
+        - connections
+        - logs
+        - topology
+        - proxies
+        - rules
+        - profiles
+        - advanced
+        - settings
+        - menubar
+        - kernel
+        - dns
+        - tun
+        - routing
+        - system-proxy
+        - storage
+        - performance
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any existing workflow or workaround the user has today?

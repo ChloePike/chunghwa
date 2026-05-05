@@ -1,0 +1,25 @@
+name: Question
+description: Ask how to build, configure, or use ChungHwa.
+title: "[q] "
+labels: ["question", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Protocol-level questions about Clash / mihomo (rule syntax,
+        proxy types, fake-ip semantics, subscription header fields)
+        will get faster answers from the
+        [mihomo wiki](https://wiki.metacubex.one/) than here.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you've tried
+      description: Docs you've read, code paths you've inspected, settings you've flipped.
