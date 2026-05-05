@@ -58,11 +58,11 @@ struct SettingsView: View {
                     .frame(width: 72, height: 72)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("中華 · ChungHwa")
+                    Text("中華")
                         .font(ChungHwa.Typography.serif(22, weight: .semibold))
                         .foregroundStyle(ChungHwa.Palette.text)
                         .tracking(-0.4)
-                    Text("macOS 上的 mihomo 客户端")
+                    Text("一个 mihomo 客户端")
                         .font(.system(size: 11.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
                     aboutMetaPill(label: "内核", value: kernelDisplayVersion)
@@ -77,7 +77,7 @@ struct SettingsView: View {
                             NSWorkspace.shared.open(url)
                         }
                     }
-                    Button("复制版本信息") {
+                    Button("复制版本") {
                         let info = "ChungHwa v\(Self.shortVersion) (\(Self.buildVersion)) · mihomo \(kernelDisplayVersion) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(info, forType: .string)
@@ -154,7 +154,7 @@ struct SettingsView: View {
                 }
 
                 Toggle(isOn: $closeKeepsRunning) {
-                    Text("关窗保持后台运行")
+                    Text("关窗后保持运行")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(ChungHwa.Palette.text)
                 }
@@ -173,7 +173,7 @@ struct SettingsView: View {
                         NSApp.setActivationPolicy(newValue ? .accessory : .regular)
                     }
 
-                    Text("仅作为菜单栏应用运行。无 Dock 图标、无 cmd-tab。可通过菜单栏唤回。")
+                    Text("只留菜单栏图标，从那里唤回主窗口。")
                         .font(.system(size: 11))
                         .foregroundStyle(ChungHwa.Palette.dim)
                         .fixedSize(horizontal: false, vertical: true)
@@ -200,7 +200,7 @@ struct SettingsView: View {
                         Text("Mixed-Port")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(ChungHwa.Palette.text)
-                        Text("HTTP CONNECT + SOCKS5 共用同一端口")
+                        Text("HTTP 与 SOCKS5 共用此端口")
                             .font(.system(size: 10.5))
                             .foregroundStyle(ChungHwa.Palette.dim)
                     }
@@ -219,7 +219,7 @@ struct SettingsView: View {
                     .disabled(!portIsValid || portMatchesPersisted || applyingPort)
                 }
 
-                Text("修改端口会重启 mihomo 内核；如果系统代理是开着的，会用新端口重新启用。")
+                Text("应用后会重启内核。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(ChungHwa.Palette.dim)
             }
@@ -261,7 +261,7 @@ struct SettingsView: View {
                 lastCheckedRow
 
                 HStack(spacing: 10) {
-                    BrassButton(title: "立即检查", systemImage: "arrow.clockwise") {
+                    BrassButton(title: "检查更新", systemImage: "arrow.clockwise") {
                         Task {
                             localChecking = true
                             await downloader.checkForUpdates()
@@ -272,7 +272,7 @@ struct SettingsView: View {
                     .opacity(isChecking ? 0.55 : 1)
 
                     if shouldShowUpdateButton {
-                        GhostButton(title: "更新内核",
+                        GhostButton(title: "更新",
                                     systemImage: "arrow.down.circle") {
                             Task {
                                 await downloader.updateLatest()
@@ -319,7 +319,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var installedRow: some View {
         HStack(spacing: 8) {
-            Text("已安装")
+            Text("当前版本")
                 .font(.system(size: 11.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .frame(width: 110, alignment: .leading)
@@ -337,7 +337,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var latestRow: some View {
         HStack(spacing: 8) {
-            Text("最新可用")
+            Text("最新版本")
                 .font(.system(size: 11.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .frame(width: 110, alignment: .leading)
@@ -368,7 +368,7 @@ struct SettingsView: View {
     }
 
     private var lastCheckedText: String {
-        guard let d = downloader.lastChecked else { return "从未" }
+        guard let d = downloader.lastChecked else { return "未检查过" }
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
         return f.localizedString(for: d, relativeTo: .now)
@@ -394,7 +394,7 @@ struct SettingsView: View {
                         .lineLimit(2)
                         .truncationMode(.middle)
                 } else {
-                    Label("未找到内核二进制", systemImage: "exclamationmark.triangle.fill")
+                    Label("找不到 mihomo 二进制", systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(ChungHwa.Palette.earth)
                 }
@@ -402,7 +402,7 @@ struct SettingsView: View {
                 downloaderProgressLine
 
                 HStack(spacing: 10) {
-                    BrassButton(title: "更新内核", systemImage: "arrow.down.circle") {
+                    BrassButton(title: "下载最新", systemImage: "arrow.down.circle") {
                         Task {
                             await downloader.updateLatest()
                             if case .completed = downloader.state {
@@ -413,7 +413,7 @@ struct SettingsView: View {
                     .disabled(downloader.isWorking)
                     .opacity(downloader.isWorking ? 0.55 : 1)
 
-                    GhostButton(title: "选择自定义二进制…",
+                    GhostButton(title: "选择本地二进制…",
                                 systemImage: "folder") {
                         pickCustomBinary()
                     }
@@ -440,7 +440,7 @@ struct SettingsView: View {
     private var managedVersionTag: some View {
         if let b = resolver.current, b.source == .managed,
            let v = resolver.managedVersion() {
-            Text("已安装 \(v)")
+            Text(v)
                 .font(.system(size: 10.5, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.dim)
         } else {
@@ -454,15 +454,15 @@ struct SettingsView: View {
         case .idle:
             EmptyView()
         case .fetchingMetadata:
-            progressRow("查询 GitHub Releases…")
+            progressRow("查询 GitHub…")
         case .downloading(let v):
-            progressRow("下载 \(v) 中…")
+            progressRow("下载 \(v)…")
         case .extracting(let v):
-            progressRow("解压 \(v) 中…")
+            progressRow("解压 \(v)…")
         case .installing(let v):
-            progressRow("安装 \(v) 中…")
+            progressRow("安装 \(v)…")
         case .completed(let v):
-            Label("已安装 \(v)", systemImage: "checkmark.circle.fill")
+            Label("已装 \(v)", systemImage: "checkmark.circle.fill")
                 .font(.system(size: 11.5, weight: .semibold))
                 .foregroundStyle(ChungHwa.Palette.patina)
         case .failed(let msg):
@@ -484,7 +484,7 @@ struct SettingsView: View {
 
     private func pickCustomBinary() {
         let panel = NSOpenPanel()
-        panel.title = "选择 mihomo 二进制"
+        panel.title = "选择 mihomo"
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
@@ -512,8 +512,8 @@ struct SettingsView: View {
                                          : ChungHwa.Palette.earth)
 
                     Text(tunPrivilegedSnap
-                         ? "mihomo 内核 · 已授权 root（TUN 可用）"
-                         : "未授权（TUN 不可用，点击右侧授权）")
+                         ? "已授权 root，TUN 可用"
+                         : "未授权，TUN 不可用")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(ChungHwa.Palette.text)
 
@@ -539,7 +539,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text("授权后 mihomo 以 root 运行，TUN 模式才能创建虚拟网卡。仅本机生效，可随时撤销（chmod u-s）。")
+                Text("TUN 需要 mihomo 以 root 运行才能创建虚拟网卡。可随时用 chmod u-s 撤销。")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .fixedSize(horizontal: false, vertical: true)
@@ -582,12 +582,12 @@ struct SettingsView: View {
                          systemImage: "internaldrive",
                          iconColor: ChungHwa.Palette.patina) {
             HStack(spacing: 10) {
-                Text("打开 Application Support 目录以查看日志、配置和托管内核。")
+                Text("配置、日志、托管内核都放在这里。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                GhostButton(title: "在 Finder 中打开",
+                GhostButton(title: "在 Finder 打开",
                             systemImage: "arrow.up.right.square") {
                     openApplicationSupport()
                 }

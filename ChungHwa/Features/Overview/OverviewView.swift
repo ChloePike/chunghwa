@@ -55,9 +55,9 @@ private struct LiveTrafficCard: View {
         case oneMin, fiveMin, fifteenMin
         var label: String {
             switch self {
-            case .oneMin:     return "1分钟"
-            case .fiveMin:    return "5分钟"
-            case .fifteenMin: return "15分钟"
+            case .oneMin:     return "1 分钟"
+            case .fiveMin:    return "5 分钟"
+            case .fifteenMin: return "15 分钟"
             }
         }
     }
@@ -93,11 +93,11 @@ private struct LiveSpeedRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 18) {
-            speedColumn(arrow: "↑", caption: "上传速度",
+            speedColumn(arrow: "↑", caption: "上传",
                         bps: traffic.current?.upBps ?? 0,
                         color: ChungHwa.Palette.patina)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            speedColumn(arrow: "↓", caption: "下载速度",
+            speedColumn(arrow: "↓", caption: "下载",
                         bps: traffic.current?.downBps ?? 0,
                         color: ChungHwa.Palette.brass)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,7 +263,7 @@ private struct TrafficTotalsRow: View {
             up &+= b.upBytes
             down &+= b.downBytes
         }
-        return totals(label: "今日累计", up: up, down: down)
+        return totals(label: "今日", up: up, down: down)
     }
 
     private func totals(label: String, up: Int, down: Int) -> some View {
@@ -320,7 +320,7 @@ private struct ProxyGroupsCard: View {
                         Button {
                             switchTab(.proxies)
                         } label: {
-                            Text("查看全部 \(proxyStore.groups.count) 组 →")
+                            Text("看全部 \(proxyStore.groups.count) 组 →")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(ChungHwa.Palette.brass)
                                 .padding(.vertical, 8)
@@ -344,7 +344,7 @@ private struct ProxyGroupsCard: View {
     }
 
     private var emptyState: some View {
-        Text("暂无代理组")
+        Text("没有代理组")
             .font(.system(size: 12))
             .foregroundStyle(ChungHwa.Palette.dim)
             .padding(.vertical, 14)
@@ -492,11 +492,11 @@ private struct NetworkCard: View {
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
-                    latencyBlock("互联网", ms: net.internetLatencyMs, symbol: "globe.americas")
+                    latencyBlock("外网", ms: net.internetLatencyMs, symbol: "globe.americas")
                         .frame(maxWidth: .infinity, alignment: .leading)
                     latencyBlock("DNS", ms: net.dnsLatencyMs, symbol: "arrow.left.arrow.right")
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    latencyBlock("路由", ms: net.routerLatencyMs, symbol: "wifi.router")
+                    latencyBlock("路由器", ms: net.routerLatencyMs, symbol: "wifi.router")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(height: statTopRowHeight)
@@ -588,7 +588,7 @@ private let statBottomRowHeight: CGFloat = 36
 private struct ResourcesCard: View {
     var body: some View {
         ChCardWithHeader(
-            "活跃 · 资源",
+            "资源",
             systemImage: "speedometer",
             iconColor: ChungHwa.Palette.patina,
             right: { EmptyView() }
@@ -637,7 +637,7 @@ private struct MemoryStat: View {
 
     var body: some View {
         ChStat(
-            label: "内核内存",
+            label: "内存",
             value: traffic.memoryInUse > 0 ? ChFormat.bytes(traffic.memoryInUse) : "—",
             systemImage: "memorychip",
             color: ChungHwa.Palette.brass
@@ -676,7 +676,7 @@ private struct SubscriptionHealthCard: View {
 
     var body: some View {
         ChCardWithHeader(
-            "配置健康",
+            "配置",
             systemImage: "tray.full",
             iconColor: ChungHwa.Palette.brass,
             right: { refreshButton }

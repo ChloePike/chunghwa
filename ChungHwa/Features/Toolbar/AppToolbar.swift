@@ -53,7 +53,7 @@ private struct ToolbarReload: View {
             Image(systemName: "arrow.clockwise")
         }
         .disabled(!ready)
-        .help("重载 mihomo 配置（保留连接）")
+        .help("重载配置")
     }
 }
 
@@ -70,7 +70,7 @@ private struct ToolbarBell: View {
                                  ? AnyShapeStyle(ChungHwa.Palette.brass)
                                  : AnyShapeStyle(.primary))
         }
-        .help(unread > 0 ? "通知 · \(unread) 条新" : "通知")
+        .help(unread > 0 ? "通知（\(unread) 条新）" : "通知")
         .popover(isPresented: $open, arrowEdge: .top) {
             NotificationsPopover(store: notifications)
                 .onAppear { notifications.markAllRead() }
@@ -114,7 +114,7 @@ private struct ToolbarProfile: View {
             Label(name, systemImage: "doc.text")
                 .labelStyle(.titleAndIcon)
         }
-        .help("当前配置 — 点击切换")
+        .help("切换配置")
     }
 }
 
@@ -133,8 +133,8 @@ private struct ToolbarMode: View {
         .labelsHidden()
         .disabled(!kernelReady)
         .help(kernelReady
-              ? "出站模式（直连 / 规则 / 全局）"
-              : "切换模式需要内核运行中")
+              ? "出站模式：直连 / 规则 / 全局"
+              : "需要内核运行中")
     }
 
     private var pickerBinding: Binding<MihomoMode?> {
@@ -159,7 +159,7 @@ private struct ToolbarSysProxy: View {
                                  ? AnyShapeStyle(ChungHwa.Palette.patina)
                                  : AnyShapeStyle(.primary))
         }
-        .help("系统代理 · \(systemProxy.enabled ? "已开" : "已关")")
+        .help(systemProxy.enabled ? "系统代理 已开" : "系统代理 已关")
     }
 }
 
@@ -197,7 +197,7 @@ private struct ToolbarTUN: View {
                                  : AnyShapeStyle(.primary))
         }
         .disabled(!kernelReady)
-        .help("TUN 模式 · " + (on ? "已开" : "已关") + "（gvisor 栈，需要 root 权限）")
+        .help(on ? "TUN 已开（需要 root）" : "TUN 已关")
     }
 }
 
@@ -212,7 +212,7 @@ private struct ToolbarAnonymous: View {
                                  ? AnyShapeStyle(ChungHwa.Palette.brass)
                                  : AnyShapeStyle(.primary))
         }
-        .help("匿名模式 · \(anon.enabled ? "已开（信息已隐藏）" : "已关")")
+        .help(anon.enabled ? "匿名模式 已开" : "匿名模式 已关")
     }
 }
 
@@ -287,7 +287,7 @@ private struct NotificationsPopover: View {
                 .font(ChungHwa.Typography.serif(14, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.text)
             Spacer(minLength: 6)
-            Button("全部已读") { store.markAllRead() }
+            Button("标为已读") { store.markAllRead() }
                 .buttonStyle(.plain)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.dim)

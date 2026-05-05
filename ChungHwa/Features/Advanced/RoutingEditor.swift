@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - RoutingEditor
 
 /// Sheet for editing the user's custom routing rules. Each row holds a match
-/// type + value pair and a target. Effective only when the active profile is
-/// the default (no user yaml) — see ConfigComposer.renderRulesBlockIfNeeded.
+/// type + value pair and a target. Active across all profiles — composer
+/// splices these in ABOVE the subscription's own rules so they match first.
 struct RoutingEditor: View {
     @Environment(ConfigStore.self) private var config
     @Environment(ProxyStore.self) private var proxyStore
@@ -41,7 +41,7 @@ struct RoutingEditor: View {
             Image(systemName: "list.bullet.rectangle")
                 .font(.system(size: 13))
                 .foregroundStyle(ChungHwa.Palette.brass)
-            Text("我的路由")
+            Text("自定义路由")
                 .font(ChungHwa.Typography.serif(15, weight: .semibold))
                 .foregroundStyle(ChungHwa.Palette.text)
             Spacer(minLength: 0)
@@ -75,7 +75,7 @@ struct RoutingEditor: View {
             }
 
             if rows.isEmpty {
-                Text("尚无规则")
+                Text("还没有规则")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.faint)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -125,7 +125,7 @@ struct RoutingEditor: View {
     }
 
     private var hint: some View {
-        Text("规则按从上到下顺序匹配。仅在使用默认配置文件时生效;若加载了订阅 YAML,请直接编辑订阅源。")
+        Text("规则按顺序匹配；优先于订阅自带规则。")
             .font(.system(size: 10.5))
             .foregroundStyle(ChungHwa.Palette.faint)
             .padding(.horizontal, 4)
@@ -165,6 +165,10 @@ struct RoutingEditor: View {
             return CustomRule(match: match, target: target)
         }
         config.setCustomRules(cleaned)
+        // Rules live in the yaml — persisted preference alone wouldn't take
+        // effect until the user manually reloaded. Kick a hot reload so the
+        // newly composed yaml is applied right away.
+        Task { await kernel.reload() }
         dismiss()
     }
 }

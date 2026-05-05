@@ -25,14 +25,24 @@ enum ConfigComposer {
             withoutBlocks,
             keys: ["external-controller", "secret", "mixed-port", "port", "socks-port"]
         )
-        let body = trimmedTrailing(stripped)
+        // Inject persisted custom rules into the body. They go ABOVE the
+        // user yaml's `rules:` items so they match first (higher priority).
+        // This makes custom rules profile-agnostic — they apply whether the
+        // user is on default config, a subscription, or a hand-written file.
+        let bodyWithRules = injectCustomRulesIntoBody(trimmedTrailing(stripped))
+
         let tunEnabled = UserDefaults.standard.bool(forKey: ConfigStore.tunEnabledDefaultsKey)
         let mixedPort = ConfigStore.currentMixedPort
-        let rulesBlock = renderRulesBlockIfNeeded(usingDefault: usingDefault)
         let dnsBlock = userHasDNS ? "" : "\n" + renderDNSBlock(ConfigStore.currentDNS())
+        // Whether to redirect transparent DNS (port 53) through mihomo's
+        // own resolver. Off by default for users who would prefer DNS to
+        // pass through to whatever the OS / DHCP says (real IPs back).
+        // Gating this is what the "53 端口劫持" toggle in Advanced controls.
+        let hijackDNS = ConfigStore.currentDNS().hijackEnabled
+        let tunHijackLine = hijackDNS ? "\n  dns-hijack:\n    - any:53" : ""
 
         return """
-        \(body)\(rulesBlock)
+        \(bodyWithRules)
 
         # === ChungHwa overrides — managed by the app, do not edit ===
         mixed-port: \(mixedPort)
@@ -42,9 +52,7 @@ enum ConfigComposer {
           enable: \(tunEnabled)
           stack: gvisor
           auto-route: true
-          auto-detect-interface: true
-          dns-hijack:
-            - any:53\(dnsBlock)
+          auto-detect-interface: true\(tunHijackLine)\(dnsBlock)
         """
     }
 
@@ -136,28 +144,66 @@ enum ConfigComposer {
         "+.icloud.com",
     ]
 
-    /// When the user is on the default profile (no source yaml), inject the
-    /// persisted custom rules as the entire `rules:` block. We deliberately
-    /// don't try to merge with a user-supplied yaml — the simplest behavior
-    /// that does the right thing: custom rules apply on the default profile,
-    /// users who bring their own yaml manage their rules in that yaml.
-    private static func renderRulesBlockIfNeeded(usingDefault: Bool) -> String {
-        guard usingDefault else { return "" }
+    /// Inject persisted custom rules into the body. Two cases:
+    ///
+    /// - User yaml has a `rules:` block → insert our rules right after the
+    ///   `rules:` line so they match BEFORE the subscription's own rules
+    ///   (highest priority). The user's own MATCH catch-all at the end of
+    ///   their list remains as the fallback.
+    /// - User yaml has no `rules:` block (e.g. default profile) → append a
+    ///   fresh `rules:` block with our custom rules + a `MATCH,DIRECT`
+    ///   catch-all so traffic always has a disposition.
+    ///
+    /// This means custom rules are profile-agnostic — they apply regardless
+    /// of which subscription is active.
+    private static func injectCustomRulesIntoBody(_ body: String) -> String {
         let rules = ConfigStore.currentCustomRules()
-        guard !rules.isEmpty else {
-            return "\nrules:\n  - MATCH,DIRECT"
+            .filter {
+                !$0.match.trimmingCharacters(in: .whitespaces).isEmpty
+                && !$0.target.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+
+        let lines = body.split(separator: "\n", omittingEmptySubsequences: false)
+        var rulesIndex: Int?
+        for (idx, line) in lines.enumerated() {
+            if matchesTopLevelKey(line, keys: ["rules"]) {
+                rulesIndex = idx
+                break
+            }
         }
-        var lines: [String] = ["", "rules:"]
-        for r in rules {
+
+        if rulesIndex == nil && rules.isEmpty {
+            // Default body has no rules: at all and we have nothing custom.
+            // Add a bare catch-all so mode: rule still has a defined route.
+            return body + "\n\nrules:\n  - MATCH,DIRECT"
+        }
+
+        let renderedRules: [String] = rules.map { r in
             let match = r.match.trimmingCharacters(in: .whitespaces)
             let target = r.target.trimmingCharacters(in: .whitespaces)
-            guard !match.isEmpty, !target.isEmpty else { continue }
-            lines.append("  - \(match),\(target)")
+            return "  - \(match),\(target)"
         }
-        // Always end with a catch-all so traffic without a matching custom
-        // rule still has a defined disposition.
-        lines.append("  - MATCH,DIRECT")
-        return lines.joined(separator: "\n")
+
+        if let rulesIndex {
+            // User yaml already has a rules: block. Splice ours in right
+            // after the `rules:` line.
+            var out: [Substring] = []
+            out.reserveCapacity(lines.count + renderedRules.count)
+            for (idx, line) in lines.enumerated() {
+                out.append(line)
+                if idx == rulesIndex {
+                    for r in renderedRules { out.append(Substring(r)) }
+                }
+            }
+            return out.joined(separator: "\n")
+        }
+
+        // No rules: block in user yaml — append our own (with custom rules
+        // + catch-all).
+        var trailing = "\n\nrules:"
+        for r in renderedRules { trailing += "\n\(r)" }
+        trailing += "\n  - MATCH,DIRECT"
+        return body + trailing
     }
 
     private static func yamlScalar(_ s: String) -> String {

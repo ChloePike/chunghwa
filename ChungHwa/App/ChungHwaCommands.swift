@@ -83,7 +83,7 @@ struct ChungHwaCommands: Commands {
         }
 
         CommandGroup(replacing: .help) {
-            Button("在 GitHub 上查看中華") {
+            Button("GitHub 仓库") {
                 openURL("https://github.com/ChloePike/chunghwa")
             }
 
@@ -103,7 +103,7 @@ struct ChungHwaCommands: Commands {
 
             Divider()
 
-            Button("关于中華") {
+            Button("关于") {
                 NSApplication.shared.orderFrontStandardAboutPanel(nil)
             }
         }

@@ -124,8 +124,8 @@ private struct BannerEventBridge: View {
         Color.clear
             .frame(width: 0, height: 0)
             .onChange(of: configStore.lastError) { _, m in
-                bus.error(source: "配置", message: m)
-                notifications.post(source: "配置", level: .error, message: m)
+                bus.error(source: "内核", message: m)
+                notifications.post(source: "内核", level: .error, message: m)
             }
             .onChange(of: proxyStore.lastError) { _, m in
                 bus.error(source: "代理", message: m)
@@ -136,8 +136,8 @@ private struct BannerEventBridge: View {
                 notifications.post(source: "规则", level: .error, message: m)
             }
             .onChange(of: profileStore.lastError) { _, m in
-                bus.error(source: "配置文件", message: m)
-                notifications.post(source: "配置文件", level: .error, message: m)
+                bus.error(source: "配置", message: m)
+                notifications.post(source: "配置", level: .error, message: m)
             }
     }
 }
@@ -250,16 +250,16 @@ private struct OnboardingBanner: View {
                 .font(.system(size: 16))
                 .foregroundStyle(ChungHwa.Palette.brass)
             VStack(alignment: .leading, spacing: 1) {
-                Text("欢迎使用中華")
+                Text("欢迎")
                     .font(ChungHwa.Typography.serif(14))
                     .foregroundStyle(ChungHwa.Palette.text)
-                Text("添加 YAML 配置开始使用。")
+                Text("先添加一份 YAML 配置吧。")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.text)
             }
             Spacer(minLength: 8)
             Button(action: onCreate) {
-                Text("创建配置")
+                Text("去添加")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(ChungHwa.Palette.bone)
                     .padding(.horizontal, 12)
@@ -364,9 +364,9 @@ private struct StatusBarKernelItem: View {
     private var kernelLabel: String {
         switch kernel.status {
         case .running:  return "运行中"
-        case .starting: return "启动中…"
+        case .starting: return "启动中"
         case .failed:   return "失败"
-        case .idle:     return "空闲"
+        case .idle:     return "未启动"
         }
     }
 
@@ -432,7 +432,7 @@ private struct StatusBarModeItem: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text("模式:")
+            Text("模式")
                 .font(.system(size: 10.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
             Text(configStore.mode?.displayName ?? "—")

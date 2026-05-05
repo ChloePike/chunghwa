@@ -21,11 +21,11 @@ struct DNSEditorSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     listSection(
-                        title: "主上游 (nameserver)",
+                        title: "主上游",
                         entries: $nameservers
                     )
                     listSection(
-                        title: "兜底 (fallback)",
+                        title: "兜底",
                         entries: $fallback
                     )
                     formatHint
@@ -125,7 +125,7 @@ struct DNSEditorSheet: View {
     }
 
     private var formatHint: some View {
-        Text("支持 DoH (https://...), DoT (tls://...), DoQ (quic://...), UDP (例如 1.1.1.1)")
+        Text("https:// 是 DoH，tls:// 是 DoT，quic:// 是 DoQ，纯 IP 走 UDP")
             .font(.system(size: 10.5))
             .foregroundStyle(ChungHwa.Palette.faint)
             .padding(.horizontal, 4)

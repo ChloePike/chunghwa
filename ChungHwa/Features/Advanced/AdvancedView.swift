@@ -81,7 +81,13 @@ struct AdvancedView: View {
             Task { await config.setDNSMode(newValue, api: kernel.apiClient) }
         }
         .onChange(of: dnsHijack) { _, newValue in
-            Task { await config.setDNSHijack(newValue, api: kernel.apiClient) }
+            // tun.dns-hijack lives in the YAML, not in PATCH-able runtime
+            // state — flipping it needs the kernel to re-read the composed
+            // yaml. setDNSHijack persists; restart applies.
+            Task {
+                await config.setDNSHijack(newValue, api: kernel.apiClient)
+                await kernel.restart()
+            }
         }
         .sheet(isPresented: $showDNSEditor) {
             DNSEditorSheet()
@@ -99,8 +105,7 @@ struct AdvancedView: View {
         AdvSection(title: "内核日志") {
             AdvRow(icon: "dial.medium",
                    iconColor: ChungHwa.Palette.brass,
-                   label: "日志级别",
-                   sub: "详细输出写入 ~/Library/Logs/ChungHwa") {
+                   label: "日志级别") {
                 Stepper(value: $logLevel, options: [
                     ("silent",  "静默"),
                     ("error",   "错误"),
@@ -109,10 +114,9 @@ struct AdvancedView: View {
                     ("debug",   "调试"),
                 ])
             }
-            FootnoteRow(text: "实时同步至 mihomo · 启动时从 /configs 拉回")
             AdvRow(icon: "doc.text.magnifyingglass",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "查看内核日志",
+                   label: "在 Console 查看",
                    last: true) {
                 IconButton(systemName: "arrow.up.forward") {
                     NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Utilities/Console.app"))
@@ -122,28 +126,28 @@ struct AdvancedView: View {
     }
 
     private var connectionOptimization: some View {
-        AdvSection(title: "连接优化") {
+        AdvSection(title: "连接") {
             AdvRow(icon: "gauge.with.dots.needle.50percent",
                    iconColor: ChungHwa.Palette.patina,
                    label: "统一延迟测试",
-                   sub: "需要重启内核") {
+                   sub: "改了要重启内核") {
                 Switch(isOn: $unifiedDelay)
             }
             AdvRow(icon: "arrow.triangle.branch",
                    iconColor: ChungHwa.Palette.brass,
-                   label: "TCP 并发连接",
-                   sub: "对所选节点开多条 TCP 流") {
+                   label: "TCP 并发",
+                   sub: "对节点开多条 TCP 流") {
                 Switch(isOn: $tcpConcurrent)
             }
             AdvRow(icon: "globe",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "IPv6 支持") {
+                   label: "IPv6") {
                 Switch(isOn: $ipv6)
             }
             AdvRow(icon: "bolt.horizontal",
                    iconColor: ChungHwa.Palette.brass,
                    label: "禁用 QUIC",
-                   sub: "部分网络限速 QUIC，回落 TCP 更稳",
+                   sub: "QUIC 被限速时回落到 TCP",
                    last: true) {
                 Stepper(value: $quic, options: [
                     ("off", "从不"),
@@ -151,7 +155,6 @@ struct AdvancedView: View {
                     ("all", "总是"),
                 ])
             }
-            FootnoteRow(text: "实时: TCP 并发、IPv6 · 本地: 统一延迟、禁用 QUIC")
         }
     }
 
@@ -160,7 +163,7 @@ struct AdvancedView: View {
             AdvRow(icon: "arrow.left.arrow.right",
                    iconColor: ChungHwa.Palette.patina,
                    label: "解析模式",
-                   sub: "智能模式: 国内走系统，国外走 fake-ip") {
+                   sub: "智能：国内系统、国外 fake-ip") {
                 Stepper(value: $dnsMode, options: [
                     ("system",  "系统"),
                     ("smart",   "智能"),
@@ -170,13 +173,13 @@ struct AdvancedView: View {
             AdvRow(icon: "shield",
                    iconColor: ChungHwa.Palette.brass,
                    label: "劫持 53 端口",
-                   sub: "捕获系统所有 DNS 流量") {
+                   sub: "接管系统所有 DNS") {
                 Switch(isOn: $dnsHijack)
             }
             AdvRow(icon: "server.rack",
                    iconColor: ChungHwa.Palette.patina,
                    label: "上游解析器",
-                   sub: "每行一条；支持 DoH、DoT、DoQ",
+                   sub: "DoH / DoT / DoQ",
                    last: true) {
                 Text(upstreamSummary)
                     .font(ChungHwa.Typography.mono(11))
@@ -194,12 +197,12 @@ struct AdvancedView: View {
                 }
                 .buttonStyle(.plain)
             }
-            FootnoteRow(text: "仅在使用默认配置时生效；订阅 YAML 自带 dns 块时优先用订阅自己的")
+            FootnoteRow(text: "订阅 YAML 自带 dns 块时，会用订阅里的设置")
         }
     }
 
     private var routing: some View {
-        AdvSection(title: "我的路由") {
+        AdvSection(title: "路由") {
             AdvRow(icon: "list.bullet.rectangle",
                    iconColor: ChungHwa.Palette.brass,
                    label: "自定义规则",
@@ -209,7 +212,7 @@ struct AdvancedView: View {
                     showRoutingEditor = true
                 } label: {
                     HStack(spacing: 4) {
-                        Text("查看 / 编辑")
+                        Text("编辑")
                             .font(.system(size: 11, weight: .semibold))
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
@@ -225,22 +228,22 @@ struct AdvancedView: View {
                 }
                 .buttonStyle(.plain)
             }
-            FootnoteRow(text: "仅在使用默认配置时生效；订阅 YAML 请直接编辑源文件")
+            FootnoteRow(text: "订阅 YAML 的规则请去源文件改")
         }
     }
 
     private var upstreamSummary: String {
         let count = config.dnsNameservers.count
-        guard count > 0 else { return "0 个" }
+        guard count > 0 else { return "未设置" }
         let first = config.dnsNameservers.first ?? ""
         let host = Self.hostFragment(of: first)
-        return "\(count) 个 · \(host)"
+        return "\(count) 条 · \(host)"
     }
 
     private var routingSummary: String {
         let n = config.customRules.count
-        if n == 0 { return "尚未添加规则" }
-        return "\(n) 条规则"
+        if n == 0 { return "无" }
+        return "\(n) 条"
     }
 
     /// Pull a short host-ish fragment out of a resolver string for the row
@@ -261,12 +264,11 @@ struct AdvancedView: View {
                    iconColor: lan ? ChungHwa.Palette.brass : ChungHwa.Palette.patina,
                    label: "允许局域网连接",
                    sub: lan
-                        ? "其他设备可使用此 Mac 作为网关"
-                        : "只有此 Mac 能连接代理",
+                        ? "局域网内其他设备可走这台 Mac"
+                        : "只有这台 Mac 能用代理",
                    last: true) {
                 Switch(isOn: $lan)
             }
-            FootnoteRow(text: "实时同步至 mihomo · 启动时从 /configs 拉回")
         }
     }
 
@@ -275,13 +277,13 @@ struct AdvancedView: View {
             AdvRow(icon: "person",
                    iconColor: ChungHwa.Palette.patina,
                    label: "用户名") {
-                TextInputField(text: $authUser, placeholder: "可选")
+                TextInputField(text: $authUser, placeholder: "可留空")
             }
             AdvRow(icon: "key.horizontal",
                    iconColor: ChungHwa.Palette.brass,
                    label: "密码") {
                 TextInputField(text: $authPass,
-                               placeholder: "可选",
+                               placeholder: "可留空",
                                isSecure: !showPass,
                                mono: true) {
                     Button {
@@ -296,9 +298,9 @@ struct AdvancedView: View {
             }
             // Footer note as a final non-row element inside the section card.
             HStack(alignment: .top, spacing: 0) {
-                (Text("本地连接（")
+                (Text("本机（")
                     + Text("127.0.0.0/8").font(ChungHwa.Typography.mono(10.5))
-                    + Text("）默认绕过认证。"))
+                    + Text("）不走认证。"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(ChungHwa.Palette.faint)
             }
@@ -315,11 +317,11 @@ struct AdvancedView: View {
     }
 
     private var bypassList: some View {
-        AdvSection(title: "绕过认证的 IP 段") {
+        AdvSection(title: "免认证 IP 段") {
             // Add row
             HStack(spacing: 8) {
                 TextInputField(text: $newIp,
-                               placeholder: "例如 198.18.0.0/16",
+                               placeholder: "如 198.18.0.0/16",
                                mono: true,
                                fillsWidth: true)
                 Button(action: addIp) {
