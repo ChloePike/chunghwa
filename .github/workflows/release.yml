@@ -52,42 +52,16 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
-          # Stash xcodebuild version into a file so cache keys can hash
-          # against it (fluid Xcode minor bumps shouldn't poison caches).
-          xcodebuild -version > .xcodebuild-version
 
       - name: Cache vendored mihomo
-        # The script picks `latest` if no arg is passed; if you want a new
-        # mihomo you change scripts/fetch-mihomo.sh or bust the key
-        # manually. Cache hit lets us skip the ~10s download + lipo +
-        # codesign on every slice.
+        # Skip the ~10s download + lipo + codesign per slice. The script
+        # picks `latest` when no arg is passed, so the cache key is bound
+        # to fetch-mihomo.sh — change the script (or pin a version) when
+        # you want a fresh download.
         uses: actions/cache@v4
         with:
           path: Vendor/mihomo
           key: mihomo-${{ runner.os }}-${{ hashFiles('scripts/fetch-mihomo.sh') }}
-
-      - name: Cache Xcode module cache
-        # ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex stores
-        # precompiled SDK module bridges (SwiftUI/AppKit/Foundation). Stable
-        # across builds — only invalidates when Xcode itself changes.
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
-          key: xcode-modulecache-${{ runner.os }}-${{ hashFiles('.xcodebuild-version') }}-v1
-          restore-keys: |
-            xcode-modulecache-${{ runner.os }}-
-
-      - name: Cache DerivedData (${{ matrix.arch }})
-        # Per-arch DerivedData. Hashes every .swift file + the pbxproj so
-        # any source/project change misses; restore-keys give fuzzy hits
-        # so we at least reuse the SwiftPM/SDK index parts.
-        uses: actions/cache@v4
-        with:
-          path: build/derived-${{ matrix.arch }}
-          key: deriveddata-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('.xcodebuild-version') }}-${{ hashFiles('ChungHwa/**/*.swift', 'ChungHwa.xcodeproj/project.pbxproj') }}
-          restore-keys: |
-            deriveddata-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('.xcodebuild-version') }}-
-            deriveddata-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Build ${{ matrix.arch }} slice
         env:
