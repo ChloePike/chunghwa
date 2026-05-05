@@ -15,6 +15,7 @@ import SwiftUI
 struct AdvancedView: View {
     @Environment(KernelController.self) private var kernel
     @Environment(ConfigStore.self)      private var config
+    @Environment(SystemProxyController.self) private var systemProxy
 
     // ── Kernel logs ────────────────────────────────────────────────────
     @AppStorage("ChungHwa.Advanced.LogLevel")          private var logLevel: String  = "error"
@@ -23,7 +24,6 @@ struct AdvancedView: View {
     @AppStorage("ChungHwa.Advanced.UnifiedDelay")      private var unifiedDelay: Bool = true
     @AppStorage("ChungHwa.Advanced.TCPConcurrent")     private var tcpConcurrent: Bool = true
     @AppStorage("ChungHwa.Advanced.IPv6")              private var ipv6: Bool = true
-    @AppStorage("ChungHwa.Advanced.QUIC")              private var quic: String = "ext"
 
     // ── DNS ────────────────────────────────────────────────────────────
     @AppStorage("ChungHwa.Advanced.DNSMode")           private var dnsMode: String = "smart"
@@ -36,6 +36,10 @@ struct AdvancedView: View {
     @AppStorage("ChungHwa.Advanced.AuthUser")          private var authUser: String = ""
     @AppStorage("ChungHwa.Advanced.AuthPass")          private var authPass: String = ""
     @State private var showPass = false
+    /// Snapshot taken when the auth section appears. We restart the kernel
+    /// only when the user has actually changed these from what's currently
+    /// active, not on every keystroke.
+    @State private var authBaseline: (String, String) = ("", "")
 
     // ── Bypass list (persisted as JSON-encoded Data via UserDefaults) ──
     @State private var bypass: [BypassEntry] = AdvancedView.loadBypass()
@@ -94,6 +98,13 @@ struct AdvancedView: View {
                 await kernel.restart()
             }
         }
+        .onChange(of: unifiedDelay) { _, newValue in
+            // unified-delay is a top-level yaml flag; not exposed via PATCH.
+            // Persist + restart so the new yaml takes effect.
+            config.setUnifiedDelay(newValue)
+            Task { await kernel.restart() }
+        }
+        .task { authBaseline = (authUser, authPass) }
         .sheet(isPresented: $showDNSEditor) {
             DNSEditorSheet()
                 .environment(kernel)
@@ -146,19 +157,9 @@ struct AdvancedView: View {
             }
             AdvRow(icon: "globe",
                    iconColor: ChungHwa.Palette.patina,
-                   label: "IPv6") {
-                Switch(isOn: $ipv6)
-            }
-            AdvRow(icon: "bolt.horizontal",
-                   iconColor: ChungHwa.Palette.brass,
-                   label: "禁用 QUIC",
-                   sub: "QUIC 被限速时回落到 TCP",
+                   label: "IPv6",
                    last: true) {
-                Stepper(value: $quic, options: [
-                    ("off", "从不"),
-                    ("ext", "仅外网"),
-                    ("all", "总是"),
-                ])
+                Switch(isOn: $ipv6)
             }
         }
     }
@@ -301,13 +302,32 @@ struct AdvancedView: View {
                     .buttonStyle(.plain)
                 }
             }
-            // Footer note as a final non-row element inside the section card.
-            HStack(alignment: .top, spacing: 0) {
+            // Footer: hint + apply button. Auth is part of the boot yaml so
+            // it doesn't take effect until the kernel restarts; expose a
+            // single "应用" rather than restarting on every keystroke.
+            HStack(alignment: .center, spacing: 8) {
                 (Text("本机（")
                     + Text("127.0.0.0/8").font(ChungHwa.Typography.mono(10.5))
                     + Text("）不走认证。"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(ChungHwa.Palette.faint)
+                Spacer(minLength: 8)
+                Button {
+                    config.setProxyAuth(user: authUser, pass: authPass)
+                    authBaseline = (authUser, authPass)
+                    Task { await kernel.restart() }
+                } label: {
+                    Text("应用")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(height: 24)
+                        .background(ChungHwa.Palette.brass,
+                                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(authUser == authBaseline.0 && authPass == authBaseline.1)
+                .opacity(authUser == authBaseline.0 && authPass == authBaseline.1 ? 0.45 : 1)
             }
             .padding(.horizontal, 14)
             .padding(.top, 8)
@@ -350,6 +370,7 @@ struct AdvancedView: View {
                     if !entry.locked {
                         bypass.removeAll { $0.id == entry.id }
                         AdvancedView.saveBypass(bypass)
+                        systemProxy.reapply()
                     }
                 }
             }
@@ -364,6 +385,9 @@ struct AdvancedView: View {
         bypass.append(.init(ip: trimmed, tag: .custom, locked: false))
         AdvancedView.saveBypass(bypass)
         newIp = ""
+        // Push the new exception list to the live SCPreferences so this
+        // bypass takes effect immediately (no need to toggle off/on).
+        systemProxy.reapply()
     }
 
     // MARK: - Bypass persistence

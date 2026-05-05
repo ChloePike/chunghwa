@@ -68,26 +68,17 @@ final class GeoIPStore {
     /// per-frame connections updates, short enough to feel live.
     private static let debounce: TimeInterval = 0.4
 
-    /// Flush the on-disk cache after this many new entries, so a single
-    /// long session doesn't accumulate hundreds of un-persisted lookups.
-    private static let persistEvery: Int = 20
-
     // MARK: - Init
 
     init() {
-        let appSupport = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = appSupport.appendingPathComponent("ChungHwa", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        self.cacheURL = dir.appendingPathComponent("geoip-cache.json")
-
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 5
         cfg.timeoutIntervalForResource = 8
         cfg.waitsForConnectivity = false
         self.session = URLSession(configuration: cfg)
 
-        loadCache()
+        countryByIP = Database.shared.loadAllGeoIP()
+        log.debug("loaded \(self.countryByIP.count, privacy: .public) cached geoip entries")
     }
 
     // MARK: - Public API
@@ -194,17 +185,15 @@ final class GeoIPStore {
             return
         }
 
+        let now = Date()
+        var entries: [(ip: String, country: String, fetchedAt: Date)] = []
+        entries.reserveCapacity(collected.count)
         for (ip, code) in collected {
             countryByIP[ip] = code
+            entries.append((ip: ip, country: code, fetchedAt: now))
         }
         log.debug("geoip flush: \(collected.count, privacy: .public)/\(batch.count, privacy: .public) resolved")
-        pendingFlushCount += collected.count
-        if pendingFlushCount >= Self.persistEvery {
-            pendingFlushCount = 0
-        }
-        // Either threshold hit OR end of a quiet burst — persist either way
-        // so a quiet session still ends up on disk.
-        persistCache()
+        Database.shared.upsertGeoIPs(entries)
     }
 
     // MARK: - HTTP
@@ -289,35 +278,4 @@ final class GeoIPStore {
         return false
     }
 
-    // MARK: - Persistence
-
-    private func loadCache() {
-        guard FileManager.default.fileExists(atPath: cacheURL.path) else { return }
-        do {
-            let data = try Data(contentsOf: cacheURL)
-            let decoded = try JSONDecoder().decode([String: String].self, from: data)
-            countryByIP = decoded
-            log.debug("loaded \(decoded.count, privacy: .public) cached geoip entries")
-        } catch {
-            log.error("geoip cache load failed: \(String(describing: error), privacy: .public)")
-        }
-    }
-
-    /// Atomic write so a crash mid-flush can never leave a half-written
-    /// cache file behind. Snapshot the dict before hopping off the main
-    /// actor so the file work doesn't block the UI.
-    private func persistCache() {
-        let snapshot = countryByIP
-        let url = cacheURL
-        Task.detached(priority: .utility) {
-            do {
-                let data = try JSONSerialization.data(
-                    withJSONObject: snapshot, options: [.sortedKeys])
-                try data.write(to: url, options: [.atomic])
-            } catch {
-                // Fail quiet — the in-memory cache is still authoritative
-                // for this session; we'll retry on the next batch.
-            }
-        }
-    }
 }

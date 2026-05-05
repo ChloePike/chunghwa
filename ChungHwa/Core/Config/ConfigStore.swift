@@ -53,6 +53,9 @@ final class ConfigStore {
     private(set) var dnsHijackEnabled: Bool
     private(set) var dnsMode: String
     private(set) var customRules: [CustomRule]
+    private(set) var unifiedDelay: Bool
+    private(set) var proxyAuthUser: String
+    private(set) var proxyAuthPass: String
     private(set) var lastError: String?
     private(set) var isApplyingMode: Bool = false
 
@@ -63,6 +66,10 @@ final class ConfigStore {
     static let dnsHijackKey = "ChungHwa.Advanced.DNSHijack"
     static let dnsModeKey = "ChungHwa.Advanced.DNSMode"
     static let customRulesKey = "ChungHwa.CustomRules"
+    static let unifiedDelayKey = "ChungHwa.Advanced.UnifiedDelay"
+    static let proxyAuthUserKey = "ChungHwa.Advanced.AuthUser"
+    static let proxyAuthPassKey = "ChungHwa.Advanced.AuthPass"
+    static let bypassListKey = "ChungHwa.Advanced.BypassList"
     static let defaultMixedPort = 7890
 
     static let defaultNameservers = [
@@ -101,6 +108,32 @@ final class ConfigStore {
         return decoded
     }
 
+    /// Whether to inject `unified-delay: true` into the composed yaml. mihomo
+    /// reports a single delay number per node when on, instead of separate
+    /// connect / handshake numbers — friendlier for at-a-glance comparison.
+    static var currentUnifiedDelay: Bool {
+        if UserDefaults.standard.object(forKey: unifiedDelayKey) == nil { return true }
+        return UserDefaults.standard.bool(forKey: unifiedDelayKey)
+    }
+
+    /// `(user, pass)` for HTTP/SOCKS inbound auth. Both empty = no auth.
+    static func currentProxyAuth() -> (user: String, pass: String) {
+        let u = UserDefaults.standard.string(forKey: proxyAuthUserKey) ?? ""
+        let p = UserDefaults.standard.string(forKey: proxyAuthPassKey) ?? ""
+        return (u, p)
+    }
+
+    /// User-managed system-proxy bypass entries. Read by SystemProxyController
+    /// to populate the `ExceptionsList` when enabling the macOS proxy. Stored
+    /// as JSON-encoded `[BypassEntry]` from AdvancedView; we only need the
+    /// `ip` field here so we extract it loosely.
+    static func currentBypassIPs() -> [String] {
+        guard let data = UserDefaults.standard.data(forKey: bypassListKey),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return [] }
+        return array.compactMap { $0["ip"] as? String }
+    }
+
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "config")
 
     init() {
@@ -112,6 +145,27 @@ final class ConfigStore {
         self.dnsHijackEnabled = prefs.hijackEnabled
         self.dnsMode = prefs.mode
         self.customRules = Self.currentCustomRules()
+        self.unifiedDelay = Self.currentUnifiedDelay
+        let auth = Self.currentProxyAuth()
+        self.proxyAuthUser = auth.user
+        self.proxyAuthPass = auth.pass
+    }
+
+    /// Persist + flag the unified-delay switch. Caller must trigger a kernel
+    /// restart for the new yaml to take effect (no PATCH path on mihomo for
+    /// this).
+    func setUnifiedDelay(_ enabled: Bool) {
+        unifiedDelay = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.unifiedDelayKey)
+    }
+
+    /// Persist proxy-auth credentials. Empty user disables auth entirely.
+    /// Caller must restart the kernel to apply.
+    func setProxyAuth(user: String, pass: String) {
+        proxyAuthUser = user
+        proxyAuthPass = pass
+        UserDefaults.standard.set(user, forKey: Self.proxyAuthUserKey)
+        UserDefaults.standard.set(pass, forKey: Self.proxyAuthPassKey)
     }
 
     func reset() {

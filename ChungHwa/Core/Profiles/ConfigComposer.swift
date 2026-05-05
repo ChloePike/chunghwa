@@ -19,11 +19,17 @@ enum ConfigComposer {
         // ship its own dns block).
         let userHasDNS = hasTopLevelKey(bodyRaw, key: "dns")
 
-        let blockKeysToStrip: [String] = userHasDNS ? ["tun"] : ["tun", "dns"]
+        let blockKeysToStrip: [String] = userHasDNS
+            ? ["tun", "authentication"]
+            : ["tun", "dns", "authentication"]
         let withoutBlocks = stripTopLevelBlocks(bodyRaw, keys: blockKeysToStrip)
         let stripped = stripTopLevelKeys(
             withoutBlocks,
-            keys: ["external-controller", "secret", "mixed-port", "port", "socks-port"]
+            keys: [
+                "external-controller", "secret",
+                "mixed-port", "port", "socks-port",
+                "unified-delay", "authentication",
+            ]
         )
         // Inject persisted custom rules into the body. They go ABOVE the
         // user yaml's `rules:` items so they match first (higher priority).
@@ -41,6 +47,18 @@ enum ConfigComposer {
         let hijackDNS = ConfigStore.currentDNS().hijackEnabled
         let tunHijackLine = hijackDNS ? "\n  dns-hijack:\n    - any:53" : ""
 
+        let unifiedDelay = ConfigStore.currentUnifiedDelay
+        let auth = ConfigStore.currentProxyAuth()
+        let authBlock: String
+        if !auth.user.isEmpty {
+            // Quote the credential pair to keep colons / specials safe.
+            let escaped = "\(auth.user):\(auth.pass)"
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            authBlock = "\nauthentication:\n  - \"\(escaped)\""
+        } else {
+            authBlock = ""
+        }
+
         return """
         \(bodyWithRules)
 
@@ -48,6 +66,7 @@ enum ConfigComposer {
         mixed-port: \(mixedPort)
         external-controller: \(externalControllerHostPort)
         secret: \(secret)
+        unified-delay: \(unifiedDelay)\(authBlock)
         tun:
           enable: \(tunEnabled)
           stack: gvisor

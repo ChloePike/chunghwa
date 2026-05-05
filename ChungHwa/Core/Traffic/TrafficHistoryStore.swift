@@ -31,19 +31,18 @@ final class TrafficHistoryStore {
 
     private(set) var minutes: [Bucket] = []
 
-    private let storeURL: URL
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "traffic-history")
-    private let saveQueue = DispatchQueue(label: "com.tzaigroup.chunghwa.traffic-history.save", qos: .utility)
 
     private static let maxMinutes = 1440
+    private static let keepHours = 24
 
     init() {
-        let appSupport = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = appSupport.appendingPathComponent("ChungHwa", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        self.storeURL = dir.appendingPathComponent("traffic-history.json")
-        load()
+        let cutoff = Date().addingTimeInterval(-Double(Self.keepHours) * 3600)
+        let rows = Database.shared.loadTrafficHistory(since: cutoff)
+        self.minutes = rows.map {
+            Bucket(minuteStart: $0.minuteStart, downBytes: $0.down, upBytes: $0.up)
+        }
+        log.info("traffic-history: loaded \(self.minutes.count, privacy: .public) buckets")
     }
 
     // MARK: - Public API
@@ -106,66 +105,24 @@ final class TrafficHistoryStore {
             minutes.removeFirst(minutes.count - Self.maxMinutes)
         }
 
+        if let current = minutes.last {
+            Database.shared.upsertTrafficBucket(
+                minuteStart: current.minuteStart,
+                up: current.upBytes,
+                down: current.downBytes
+            )
+        }
         if rolled {
-            scheduleSave()
+            Database.shared.pruneTrafficHistory(keepHours: Self.keepHours)
         }
     }
 
-    /// Wipes both in-memory state and the on-disk file. Intended for a user-
-    /// initiated reset from Settings; we deliberately do *not* call this on
-    /// kernel stop, so the history survives restarts.
+    /// Wipes both in-memory state and the persisted history. Intended for a
+    /// user-initiated reset from Settings; we deliberately do *not* call this
+    /// on kernel stop, so the history survives restarts.
     func reset() {
         minutes.removeAll(keepingCapacity: true)
-        let url = storeURL
-        let logger = log
-        saveQueue.async {
-            do {
-                if FileManager.default.fileExists(atPath: url.path) {
-                    try FileManager.default.removeItem(at: url)
-                }
-            } catch {
-                logger.error("traffic-history: reset remove failed: \(String(describing: error), privacy: .public)")
-            }
-        }
-    }
-
-    // MARK: - Persistence
-
-    private func load() {
-        guard FileManager.default.fileExists(atPath: storeURL.path) else { return }
-        do {
-            let data = try Data(contentsOf: storeURL)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let decoded = try decoder.decode([Bucket].self, from: data)
-            // Drop anything older than the 24h window; keep chronological order.
-            let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
-            self.minutes = decoded
-                .filter { $0.minuteStart >= cutoff }
-                .sorted { $0.minuteStart < $1.minuteStart }
-            log.info("traffic-history: loaded \(self.minutes.count, privacy: .public) buckets")
-        } catch {
-            log.error("traffic-history: load failed: \(String(describing: error), privacy: .public)")
-        }
-    }
-
-    /// Throttled snapshot: capture the current buckets on the main actor and
-    /// fan out to a serial queue for the actual disk write so we never block
-    /// the UI on JSON encoding / fsync.
-    private func scheduleSave() {
-        let snapshot = minutes
-        let url = storeURL
-        let logger = log
-        saveQueue.async {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            do {
-                let data = try encoder.encode(snapshot)
-                try data.write(to: url, options: .atomic)
-            } catch {
-                logger.error("traffic-history: save failed: \(String(describing: error), privacy: .public)")
-            }
-        }
+        Database.shared.deleteAllTraffic()
     }
 
     // MARK: - Helpers

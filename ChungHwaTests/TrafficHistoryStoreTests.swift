@@ -6,30 +6,21 @@ import Foundation
 @Suite(.serialized)
 struct TrafficHistoryStoreTests {
 
-    /// Helper: snapshot + restore the on-disk history file so a test run
-    /// doesn't clobber the user's real history.
+    /// Snapshot + restore the traffic_history table around each test so we
+    /// don't clobber the user's real history.
+    @MainActor
     private final class HistorySandbox {
-        let url: URL
-        let backup: URL?
+        let backup: [(minuteStart: Date, up: Int, down: Int)]
         init() {
-            let dir = FileManager.default
-                .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("ChungHwa", isDirectory: true)
-            self.url = dir.appendingPathComponent("traffic-history.json")
-            // If a real history exists, move it aside.
-            if FileManager.default.fileExists(atPath: url.path) {
-                let bak = dir.appendingPathComponent("traffic-history.test-backup.json")
-                try? FileManager.default.removeItem(at: bak)
-                try? FileManager.default.moveItem(at: url, to: bak)
-                self.backup = bak
-            } else {
-                self.backup = nil
-            }
+            self.backup = Database.shared.loadTrafficHistory(
+                since: Date(timeIntervalSince1970: 0))
+            Database.shared.deleteAllTraffic()
         }
         func restore() {
-            try? FileManager.default.removeItem(at: url)
-            if let bak = backup {
-                try? FileManager.default.moveItem(at: bak, to: url)
+            Database.shared.deleteAllTraffic()
+            for row in backup {
+                Database.shared.upsertTrafficBucket(
+                    minuteStart: row.minuteStart, up: row.up, down: row.down)
             }
         }
     }

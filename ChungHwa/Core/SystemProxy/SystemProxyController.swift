@@ -67,6 +67,19 @@ final class SystemProxyController {
         }
     }
 
+    /// Re-apply current state (used after the bypass list changes so the
+    /// new ExceptionsList is picked up without the user toggling off+on).
+    func reapply() {
+        guard enabled else { return }
+        do {
+            try apply(on: true)
+            lastError = nil
+        } catch {
+            lastError = String(describing: error)
+            log.error("reapply failed: \(self.lastError ?? "?", privacy: .public)")
+        }
+    }
+
     func disable() {
         do {
             try apply(on: false)
@@ -98,6 +111,25 @@ final class SystemProxyController {
             }
         }
         return false
+    }
+
+    /// Baseline + user-added bypass entries. De-duped, preserves baseline
+    /// order so a user-added duplicate doesn't shadow the system defaults.
+    private static func composeExceptions() -> [String] {
+        let baseline = [
+            "127.0.0.1", "localhost",
+            "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+            "*.local",
+        ]
+        var seen = Set(baseline)
+        var out = baseline
+        for entry in ConfigStore.currentBypassIPs() {
+            let trimmed = entry.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !seen.contains(trimmed) else { continue }
+            seen.insert(trimmed)
+            out.append(trimmed)
+        }
+        return out
     }
 
     /// Lazily creates (or returns the cached) AuthorizationRef. The first
@@ -163,14 +195,11 @@ final class SystemProxyController {
                 next[kSCPropNetProxiesSOCKSEnable as String] = 1
                 next[kSCPropNetProxiesSOCKSProxy as String]  = host
                 next[kSCPropNetProxiesSOCKSPort as String]   = port
-                // Bypass localhost & RFC1918 — leave any existing exception list alone if present.
-                if next[kSCPropNetProxiesExceptionsList as String] == nil {
-                    next[kSCPropNetProxiesExceptionsList as String] = [
-                        "127.0.0.1", "localhost",
-                        "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-                        "*.local",
-                    ]
-                }
+                // Bypass list = baseline (loopback + RFC1918 + .local) PLUS
+                // anything the user added in Advanced → 代理绕过. We always
+                // overwrite so changes in the UI take effect on the next
+                // toggle-cycle.
+                next[kSCPropNetProxiesExceptionsList as String] = Self.composeExceptions()
             } else {
                 next[kSCPropNetProxiesHTTPEnable as String]  = 0
                 next[kSCPropNetProxiesHTTPSEnable as String] = 0

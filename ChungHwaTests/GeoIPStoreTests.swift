@@ -86,10 +86,13 @@ struct GeoIPStoreTests {
         // lookup. We don't await the network — just verify the queueing
         // contract. Use an IP that's definitively public-scoped but won't
         // hit the network during the test (we never await flushPending).
-        #expect(store.countryByIP["8.8.8.8"] == nil)
-        let r = store.country(for: "8.8.8.8")
+        // First make sure the seed cache isn't already pre-populated for
+        // this IP from a previous run.
+        let probe = "203.0.113.42"  // TEST-NET-3 (RFC5737), guaranteed public-scope-shaped
+        if store.countryByIP[probe] != nil { return }
+        let r = store.country(for: probe)
         #expect(r == nil)
-        #expect(store.pendingIPs.contains("8.8.8.8"))
+        #expect(store.pendingIPs.contains(probe))
     }
 
     @Test func resolveBulkSeparatesLanFromPublic() {
@@ -106,7 +109,8 @@ struct GeoIPStoreTests {
     @Test func resetCancelsPendingButPreservesCache() {
         let store = GeoIPStore()
         _ = store.country(for: "192.168.5.5")
-        _ = store.country(for: "8.8.4.4")
+        // Use a TEST-NET-1 address — guaranteed not in any production cache.
+        _ = store.country(for: "192.0.2.123")
         #expect(!store.pendingIPs.isEmpty)
         store.reset()
         #expect(store.pendingIPs.isEmpty)

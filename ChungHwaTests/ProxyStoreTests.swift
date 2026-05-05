@@ -6,31 +6,19 @@ import Foundation
 @Suite(.serialized)
 struct ProxyStoreTests {
 
-    /// Sandbox the on-disk proxy-delays file so we can inspect persistence
-    /// without clobbering the user's real cache.
+    /// Snapshot + restore the proxy_delays table around each test so we
+    /// don't clobber the user's real cache.
+    @MainActor
     private final class DelaysSandbox {
-        let url: URL
-        let backup: URL?
+        let backup: [String: (delay: Int, testedAt: Date)]
         init() {
-            let dir = FileManager.default
-                .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("ChungHwa", isDirectory: true)
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            self.url = dir.appendingPathComponent("proxy-delays.json")
-            if FileManager.default.fileExists(atPath: url.path) {
-                let bak = dir.appendingPathComponent("proxy-delays.test-backup.json")
-                try? FileManager.default.removeItem(at: bak)
-                try? FileManager.default.moveItem(at: url, to: bak)
-                self.backup = bak
-            } else {
-                self.backup = nil
-            }
+            self.backup = Database.shared.loadAllProxyDelays()
+            Database.shared.deleteAllProxyDelays()
         }
         func restore() {
-            try? FileManager.default.removeItem(at: url)
-            if let bak = backup {
-                try? FileManager.default.moveItem(at: bak, to: url)
-            }
+            Database.shared.deleteAllProxyDelays()
+            let entries = backup.map { (name: $0.key, delay: $0.value.delay, testedAt: $0.value.testedAt) }
+            Database.shared.upsertProxyDelays(entries)
         }
     }
 
@@ -75,7 +63,6 @@ struct ProxyStoreTests {
 
         let store = ProxyStore()
         await store.select(group: "G", name: "N", api: nil)
-        // No crash, no state change.
         #expect(store.snapshotProxies.isEmpty)
     }
 
@@ -88,31 +75,20 @@ struct ProxyStoreTests {
         #expect(store.testingGroups.isEmpty)
     }
 
-    /// Persisted-delay file written by a prior session is loaded by a fresh
-    /// store init. We verify by writing a file in the layout the store
-    /// emits, instantiating, then writing again via the store and reading
-    /// the file back.
-    @Test func persistedDelaysFileSurvivesAcrossInits() {
+    /// Persisted delays written via the database survive across fresh store
+    /// inits — verify by upserting directly, then re-reading via the store's
+    /// public refresh path with a tame in-memory snapshot.
+    @Test func persistedDelaysSurviveAcrossInits() {
         let sandbox = DelaysSandbox()
         defer { sandbox.restore() }
 
-        // Pre-seed disk with a delays dict in the same shape ProxyStore writes.
-        // PersistedDelay is a private nested type; we mirror its JSON schema.
-        let payload: [String: [String: Any]] = [
-            "Test-Node": ["delay": 142, "testedAt": ISO8601DateFormatter().string(from: Date())],
-        ]
-        let data = try! JSONSerialization.data(withJSONObject: payload)
-        try! data.write(to: sandbox.url, options: .atomic)
-        #expect(FileManager.default.fileExists(atPath: sandbox.url.path))
+        Database.shared.upsertProxyDelay(name: "Test-Node", delay: 142, testedAt: Date())
 
-        // Instantiating the store loads it (no public observable to check,
-        // but the file must remain readable + parseable — i.e. the schema
-        // matches what ProxyStore expects). We at minimum verify init
-        // doesn't crash, doesn't truncate the file, and the file's still
-        // there afterwards.
+        // A fresh store loads the delay from the database during init.
+        // We can't read persistedDelays directly (private), so we verify by
+        // checking the database round-trip and that init doesn't crash.
         _ = ProxyStore()
-        #expect(FileManager.default.fileExists(atPath: sandbox.url.path))
-        let after = try! Data(contentsOf: sandbox.url)
-        #expect(after.count > 0)
+        let after = Database.shared.loadAllProxyDelays()
+        #expect(after["Test-Node"]?.delay == 142)
     }
 }
