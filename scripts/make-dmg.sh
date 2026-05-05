@@ -106,15 +106,19 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
+echo "==> staged at $STAGE:"
+ls -la "$STAGE"
 
 rm -f "$DMG"
+echo "==> hdiutil create → $DMG"
+# Default to APFS — HFS+ image creation is unreliable on macOS 26
+# runners. APFS DMGs work as drag-install volumes the same way.
 hdiutil create \
   -volname "ChungHwa $VERSION ($ARCH)" \
   -srcfolder "$STAGE" \
   -ov \
   -format UDZO \
-  -fs HFS+ \
-  "$DMG" >/dev/null
+  "$DMG"
 
 codesign --force --sign - "$DMG"
 
