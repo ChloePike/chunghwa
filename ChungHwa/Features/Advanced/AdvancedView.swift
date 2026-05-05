@@ -78,7 +78,12 @@ struct AdvancedView: View {
             Task { await config.setTCPConcurrent(newValue, api: kernel.apiClient) }
         }
         .onChange(of: dnsMode) { _, newValue in
-            Task { await config.setDNSMode(newValue, api: kernel.apiClient) }
+            // PATCH 不可靠地热更 enhanced-mode（fake-ip / redir-host），
+            // reload 让 ConfigComposer 把新 yaml 推下去再生效。
+            Task {
+                await config.setDNSMode(newValue, api: kernel.apiClient)
+                await kernel.reload()
+            }
         }
         .onChange(of: dnsHijack) { _, newValue in
             // tun.dns-hijack lives in the YAML, not in PATCH-able runtime

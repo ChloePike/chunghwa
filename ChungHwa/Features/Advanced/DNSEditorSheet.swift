@@ -170,6 +170,10 @@ struct DNSEditorSheet: View {
         let ns = nameservers.map { $0.value }
         let fb = fallback.map { $0.value }
         await config.setDNS(nameservers: ns, fallback: fb, api: kernel.apiClient)
+        // PATCH /configs 对 dns 子树的覆盖不彻底（且 user yaml 自带 dns
+        // 时我们根本不注入），reload 让新 nameserver / fallback 通过
+        // ConfigComposer 重新落盘后即刻应用。
+        await kernel.reload()
         dismiss()
     }
 }

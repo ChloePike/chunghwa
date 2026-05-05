@@ -50,8 +50,6 @@ final class GeoIPStore {
     // MARK: - Internals
 
     @ObservationIgnored private var lookupTask: Task<Void, Never>?
-    @ObservationIgnored private let cacheURL: URL
-    @ObservationIgnored private var pendingFlushCount: Int = 0
     @ObservationIgnored private let log = Logger(
         subsystem: "com.tzaigroup.chunghwa", category: "geoip")
     @ObservationIgnored private let session: URLSession
