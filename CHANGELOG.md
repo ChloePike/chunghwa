@@ -5,6 +5,32 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-05
+
+### Changed
+
+- **TUN privilege** lives at a stable, app-independent path now —
+  `/Library/PrivilegedHelperTools/org.clash.ChungHwa.mihomo`. Authorize
+  copies the current kernel binary there, `chown root:wheel` + `chmod
+  u+s` it, and the resolver picks the privileged copy from then on.
+  Survives brew upgrades, Xcode rebuilds, and switching binary source
+  (custom / managed / bundled).
+- Settings → TUN & Privileges now offers a **Revoke** button alongside
+  Authorize. Revoke `rm`s the privileged file, restarts the kernel,
+  and the .app's bundled binary takes over.
+- Earlier versions stamped setuid directly onto the .app bundle's
+  mihomo. **Users upgrading from v0.1.0 need to re-authorize once.**
+  The new location is independent of which binary the resolver picked,
+  so it stays valid across future updates.
+
+### Distribution
+
+- Repo is now public. Homebrew tap is live:
+  ```sh
+  brew tap chloepike/chunghwa
+  brew install --cask chunghwa
+  ```
+
 ## [0.1.0] — 2026-05-05
 
 First public release. Self-use, unsigned ad-hoc build, three DMGs
@@ -81,5 +107,6 @@ First public release. Self-use, unsigned ad-hoc build, three DMGs
 - TUN needs the kernel binary to run as root. **Settings → TUN &
   Privileges → Authorize** does this once via `osascript`.
 
-[Unreleased]: https://github.com/ChloePike/chunghwa/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ChloePike/chunghwa/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ChloePike/chunghwa/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ChloePike/chunghwa/releases/tag/v0.1.0
