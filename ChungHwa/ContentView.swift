@@ -292,24 +292,22 @@ private struct OnboardingBanner: View {
     }
 }
 
+/// Footer status bar. The parent shell holds NO store subscriptions so 1Hz
+/// traffic ticks don't re-evaluate the kernel/mode/system-proxy chunks; each
+/// fast-changing item lives in its own leaf and only that leaf invalidates
+/// when its store changes.
 private struct StatusBar: View {
-    @Environment(KernelController.self) private var kernel
-    @Environment(ConnectionsStore.self) private var connectionsStore
-    @Environment(TrafficStore.self) private var traffic
-    @Environment(ConfigStore.self) private var configStore
-    @Environment(SystemProxyController.self) private var systemProxy
-
     var body: some View {
         HStack(spacing: 8) {
-            kernelItem
-            separator
-            connectionsItem
-            separator
-            trafficItem
+            StatusBarKernelItem()
+            statusBarSeparator
+            StatusBarConnectionsItem()
+            statusBarSeparator
+            StatusBarTrafficItem()
             Spacer(minLength: 8)
-            modeItem
-            separator
-            systemProxyBadge
+            StatusBarModeItem()
+            statusBarSeparator
+            StatusBarSystemProxyBadge()
         }
         .padding(.horizontal, 12)
         .frame(height: 24)
@@ -321,15 +319,18 @@ private struct StatusBar: View {
                 .frame(height: 0.5)
         }
     }
+}
 
-    private var separator: some View {
-        Text("·")
-            .font(.system(size: 10.5))
-            .foregroundStyle(ChungHwa.Palette.faint)
-    }
+private var statusBarSeparator: some View {
+    Text("·")
+        .font(.system(size: 10.5))
+        .foregroundStyle(ChungHwa.Palette.faint)
+}
 
-    @ViewBuilder
-    private var kernelItem: some View {
+private struct StatusBarKernelItem: View {
+    @Environment(KernelController.self) private var kernel
+
+    var body: some View {
         HStack(spacing: 6) {
             ChDot(color: kernelDotColor, size: 6, pulse: isStarting)
             Text(kernelLabel)
@@ -375,10 +376,14 @@ private struct StatusBar: View {
         }
         return nil
     }
+}
 
-    private var connectionsItem: some View {
+private struct StatusBarConnectionsItem: View {
+    @Environment(ConnectionsStore.self) private var connectionsStore
+
+    var body: some View {
         HStack(spacing: 4) {
-            Text("\(connectionsStore.connections.count)")
+            Text("\(connectionsStore.connectionCount)")
                 .font(ChungHwa.Typography.mono(10.5))
                 .foregroundStyle(ChungHwa.Palette.dim)
             Text("连接")
@@ -386,8 +391,12 @@ private struct StatusBar: View {
                 .foregroundStyle(ChungHwa.Palette.dim)
         }
     }
+}
 
-    private var trafficItem: some View {
+private struct StatusBarTrafficItem: View {
+    @Environment(TrafficStore.self) private var traffic
+
+    var body: some View {
         HStack(spacing: 4) {
             Text("↑")
                 .font(.system(size: 10.5))
@@ -416,8 +425,12 @@ private struct StatusBar: View {
         guard let s = traffic.current else { return "—" }
         return ChFormat.rate(s.downBps)
     }
+}
 
-    private var modeItem: some View {
+private struct StatusBarModeItem: View {
+    @Environment(ConfigStore.self) private var configStore
+
+    var body: some View {
         HStack(spacing: 4) {
             Text("模式:")
                 .font(.system(size: 10.5))
@@ -427,10 +440,14 @@ private struct StatusBar: View {
                 .foregroundStyle(ChungHwa.Palette.dim)
         }
     }
+}
 
-    private var systemProxyBadge: some View {
+private struct StatusBarSystemProxyBadge: View {
+    @Environment(SystemProxyController.self) private var systemProxy
+
+    var body: some View {
         let on = systemProxy.enabled
-        return Text(on ? "系统代理 开" : "系统代理 关")
+        Text(on ? "系统代理 开" : "系统代理 关")
             .font(ChungHwa.Typography.mono(10, weight: .medium))
             .foregroundStyle(on ? ChungHwa.Palette.patina : ChungHwa.Palette.faint)
             .padding(.horizontal, 6)

@@ -6,6 +6,10 @@
 - 沟通用中文；代码、commit message、文件名用英文。
 - 不在 `main` 上做 force push 或 reset --hard。
 - 用 conventional-style 简短 commit title（< 70 字符），正文写「为什么」。
+- **不要 `pkill` ChungHwa**。mihomo 是 ChungHwa 的子进程，杀父进程会
+  连带杀掉 mihomo + 当前所有 connections。改动只 build，不重启 app；
+  让用户自己手动 quit + 重开。如果一定要重启进程，用 app 内的
+  「重启内核」（⇧⌘R）只重启 mihomo。
 
 ## 项目概览
 

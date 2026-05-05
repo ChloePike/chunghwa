@@ -144,7 +144,15 @@ private struct TrafficChart: View {
 
     var body: some View {
         let series = makeSeries()
-        Chart {
+        // Compute the y-axis ceiling once from the same series we plot —
+        // makeSeries() is the hot path of this view (touched 1Hz from the
+        // /traffic stream), so we cannot afford to walk it twice per body.
+        var peak: Double = 0
+        for p in series {
+            if p.up   > peak { peak = p.up }
+            if p.down > peak { peak = p.down }
+        }
+        return Chart {
             ForEach(series) { p in
                 AreaMark(
                     x: .value("t", p.idx),
@@ -184,13 +192,7 @@ private struct TrafficChart: View {
         .chartLegend(.hidden)
         // Force a non-degenerate y-domain so a flat 0-series still draws a
         // baseline at the chart bottom instead of collapsing the plot area.
-        .chartYScale(domain: 0...max(1, makeMaxY()))
-    }
-
-    private func makeMaxY() -> Double {
-        let series = makeSeries()
-        let m = series.flatMap { [$0.up, $0.down] }.max() ?? 0
-        return m
+        .chartYScale(domain: 0...max(1, peak))
     }
 
     private struct Point: Identifiable {
@@ -620,7 +622,7 @@ private struct ConnectionCountStat: View {
         Button { switchTab(.connections) } label: {
             ChStat(
                 label: "连接数",
-                value: String(connectionsStore.connections.count),
+                value: String(connectionsStore.connectionCount),
                 systemImage: "arrow.left.arrow.right",
                 color: ChungHwa.Palette.brass
             )

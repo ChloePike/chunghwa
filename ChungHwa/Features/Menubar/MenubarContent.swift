@@ -315,7 +315,7 @@ private struct MenubarLiveStats: View {
             Image(systemName: "arrow.left.arrow.right")
                 .font(.system(size: 10))
                 .foregroundStyle(ChungHwa.Palette.dim)
-            Text("\(connectionsStore.connections.count)")
+            Text("\(connectionsStore.connectionCount)")
                 .font(ChungHwa.Typography.mono(11, weight: .semibold))
                 .foregroundStyle(ChungHwa.Palette.text)
             Text("·").foregroundStyle(ChungHwa.Palette.faint)
@@ -562,10 +562,17 @@ struct MenubarIconName {
 /// 数变化只影响 speed leaf 内部，不再带着 icon 一起跳。
 struct MenubarLabel: View {
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             MenubarLabelIcon()
             MenubarLabelSpeed()
         }
+        // Outer frame fixed so NSStatusItem doesn't repaint its size every
+        // tick. 16 (icon) + 4 (spacing) + 86 (speed) = 106.
+        .frame(width: 106, height: 18)
+        // Anchor everything to the leading edge — the user kept seeing the
+        // icon drift because the speed Text was right-aligned, so the gap
+        // between icon and text varied with string length.
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -592,21 +599,30 @@ private struct MenubarLabelSpeed: View {
 
     var body: some View {
         if kernel.apiClient != nil {
-            Text("↑\(short(traffic.current?.upBps ?? 0)) ↓\(short(traffic.current?.downBps ?? 0))")
+            // .leading + trailing-pad: text always starts right after the
+            // icon (no variable gap). The trailing whitespace pads the cell
+            // so the total width never shrinks.
+            Text("↑\(short(traffic.current?.upBps ?? 0))  ↓\(short(traffic.current?.downBps ?? 0))")
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .monospacedDigit()
-                .frame(width: 90, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: 86, alignment: .leading)
         }
     }
 
-    /// 紧凑速率：菜单栏空间有限，三位以内 + 单位。0 → "0"，<1 KB/s → "B"。
+    /// 紧凑速率，固定 4 字符宽度（末尾空格补足）。
+    /// 4 chars 含义："0   " / "100B" / "12 K" / "1.2M" / "1.2G"。
+    /// 状态栏 item 不再因为 "0" → "1.2M" 长度跳变把 icon 一起拽着左右挪。
     private func short(_ bps: Int) -> String {
+        let raw: String
         switch bps {
-        case 0:               return "0"
-        case ..<1024:         return "\(bps)B"
-        case ..<1_048_576:    return String(format: "%.0fK", Double(bps) / 1024)
-        case ..<1_073_741_824: return String(format: "%.1fM", Double(bps) / 1_048_576)
-        default:               return String(format: "%.1fG", Double(bps) / 1_073_741_824)
+        case 0:                 raw = "0"
+        case ..<1024:           raw = "\(bps)B"
+        case ..<1_048_576:      raw = String(format: "%.0fK", Double(bps) / 1024)
+        case ..<1_073_741_824:  raw = String(format: "%.1fM", Double(bps) / 1_048_576)
+        default:                raw = String(format: "%.1fG", Double(bps) / 1_073_741_824)
         }
+        if raw.count >= 4 { return raw }
+        return raw + String(repeating: " ", count: 4 - raw.count)
     }
 }

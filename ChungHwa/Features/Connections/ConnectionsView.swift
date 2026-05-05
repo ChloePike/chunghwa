@@ -275,7 +275,6 @@ struct ConnectionsView: View {
     private func headerRow(widths: ConnectionsColumnWidths) -> some View {
         ConnectionsGridRow(
             widths:  widths,
-            dot:     { Color.clear.frame(width: 12, height: 12) },
             region:  { headerCell("地区", alignment: .center) },
             host:    { headerCell("主机", alignment: .leading) },
             process: { headerCell("进程", alignment: .leading) },
@@ -571,10 +570,6 @@ private struct ConnectionRow: View, Equatable {
     var body: some View {
         ConnectionsGridRow(
             widths: widths,
-            dot: {
-                ChDot(color: ChungHwa.Palette.patina, size: 6, pulse: true)
-                    .frame(width: 12, height: 12)
-            },
             region: {
                 Text(regionGlyph)
                     .font(.system(size: 13))
@@ -732,10 +727,9 @@ struct ConnectionsColumnWidths: Equatable {
 /// of breathing room without crowding the host name. Column widths are
 /// computed once at the card level (see `ConnectionsColumnWidths`) and
 /// passed in, so this struct does NO per-row geometry work.
-private struct ConnectionsGridRow<Dot: View, Region: View, Host: View, Process: View,
+private struct ConnectionsGridRow<Region: View, Host: View, Process: View,
                                   Down: View, Up: View, Rule: View>: View {
     let widths: ConnectionsColumnWidths
-    @ViewBuilder var dot: () -> Dot
     @ViewBuilder var region: () -> Region
     @ViewBuilder var host: () -> Host
     @ViewBuilder var process: () -> Process
@@ -745,7 +739,6 @@ private struct ConnectionsGridRow<Dot: View, Region: View, Host: View, Process: 
 
     var body: some View {
         HStack(spacing: 10) {
-            dot().frame(width: 12, alignment: .center)
             region().frame(width: 36, alignment: .center)
             host().frame(width: widths.hostW, alignment: .leading)
             process().frame(width: widths.procW, alignment: .leading)

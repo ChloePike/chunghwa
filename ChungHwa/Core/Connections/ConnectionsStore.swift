@@ -119,6 +119,13 @@ final class ConnectionsStore {
         }
 
         connections = nextConnections
+        // Only republish the count when it actually changed: leaves that
+        // subscribe via `connectionCount` skip a re-eval whenever the connection
+        // set is the same size between two snapshots (very common while traffic
+        // is flowing through stable long-lived connections).
+        if connectionCount != nextConnections.count {
+            connectionCount = nextConnections.count
+        }
         downloadTotal = snapshot.downloadTotal ?? 0
         uploadTotal = snapshot.uploadTotal ?? 0
         rates = nextRates
@@ -132,6 +139,7 @@ final class ConnectionsStore {
         pendingFrame = nil
         lastCommit = .distantPast
         connections = []
+        connectionCount = 0
         downloadTotal = 0
         uploadTotal = 0
         rates = [:]
@@ -145,6 +153,7 @@ final class ConnectionsStore {
             // Optimistically drop from local state — the next snapshot
             // confirms in <1 s.
             connections.removeAll { $0.id == id }
+            connectionCount = connections.count
             rates.removeValue(forKey: id)
             lastTotals.removeValue(forKey: id)
         } catch {
@@ -157,6 +166,7 @@ final class ConnectionsStore {
         do {
             try await api.closeAllConnections()
             connections = []
+            connectionCount = 0
             rates = [:]
             lastTotals = [:]
         } catch {
