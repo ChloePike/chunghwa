@@ -23,13 +23,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/build}"
 VERSION_ARG="${1:-}"
 ARCH="${2:-universal}"
 
-if [[ -n "$VERSION_ARG" ]]; then
-  VERSION="$VERSION_ARG"
-else
-  VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
-    "$ROOT/ChungHwa/Info.plist" 2>/dev/null || true)"
-  VERSION="${VERSION:-0.0}"
-fi
+VERSION="${VERSION_ARG:-0.0}"
 
 case "$ARCH" in
   universal|arm64|x86_64) ;;
