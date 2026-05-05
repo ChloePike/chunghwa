@@ -211,32 +211,30 @@ final class GeoIPStore {
 
     // MARK: - HTTP
 
-    /// Look up a single IP via ipwho.is. Returns the ISO 3166-1 alpha-2
-    /// country code or nil on any failure (network, decode, sentinel).
-    /// Failures are silently dropped — callers re-queue them on the next
-    /// miss.
+    /// Look up a single IP via api.country.is. Returns the ISO 3166-1
+    /// alpha-2 country code or nil on any failure. country.is's free tier
+    /// has a much higher rate limit than ipwho.is (which we used previously
+    /// and routinely 429'd from with 6 concurrent fetches), and the response
+    /// payload is just `{"ip":"…","country":"US"}` — minimal to decode.
+    /// Failures are silently dropped — callers re-queue on the next miss.
     private static func queryOne(session: URLSession, ip: String) async -> String? {
-        guard let url = URL(string: "https://ipwho.is/\(ip)?fields=success,country_code")
-        else { return nil }
+        guard let url = URL(string: "https://api.country.is/\(ip)") else { return nil }
 
         do {
             let (data, response) = try await session.data(from: url)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 return nil
             }
-            let entry = try JSONDecoder().decode(IPWhoEntry.self, from: data)
-            guard entry.success == true,
-                  let code = entry.country_code, !code.isEmpty
-            else { return nil }
+            let entry = try JSONDecoder().decode(CountryISEntry.self, from: data)
+            guard let code = entry.country, !code.isEmpty else { return nil }
             return code.uppercased()
         } catch {
             return nil
         }
     }
 
-    private struct IPWhoEntry: Decodable {
-        let success: Bool?
-        let country_code: String?
+    private struct CountryISEntry: Decodable {
+        let country: String?
     }
 
     // MARK: - Flag emoji

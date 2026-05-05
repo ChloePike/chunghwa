@@ -18,8 +18,12 @@ enum SystemProxyError: Error, CustomStringConvertible {
 
 /// Controls macOS HTTP / HTTPS / SOCKS5 system proxy via SCPreferences.
 ///
-/// Modifying network preferences requires admin authorization, prompted by
-/// the system the first time `enable()` or `disable()` runs.
+/// Modifying network preferences requires admin authorization. We cache the
+/// `AuthorizationRef` for the controller's lifetime so the user is prompted
+/// **once per app launch**, not on every toggle. macOS keeps the granted
+/// `system.preferences` right valid as long as the AuthorizationRef stays
+/// alive — the previous implementation created + freed a fresh ref each
+/// apply() and that's why every toggle re-prompted.
 @Observable
 @MainActor
 final class SystemProxyController {
@@ -35,8 +39,18 @@ final class SystemProxyController {
 
     private let log = Logger(subsystem: "com.tzaigroup.chunghwa", category: "systemProxy")
 
+    /// Cached admin auth — created lazily on first apply(), reused forever.
+    /// `@ObservationIgnored` so observation tracking isn't affected.
+    @ObservationIgnored private var cachedAuth: AuthorizationRef?
+
     init() {
         self.enabled = currentlyEnabled()
+    }
+
+    deinit {
+        if let auth = cachedAuth {
+            AuthorizationFree(auth, [.destroyRights])
+        }
     }
 
     func toggle() { enabled ? disable() : enable() }
@@ -86,14 +100,45 @@ final class SystemProxyController {
         return false
     }
 
-    private func apply(on: Bool) throws {
+    /// Lazily creates (or returns the cached) AuthorizationRef. The first
+    /// call prompts the user; subsequent calls reuse the same ref so the
+    /// user isn't re-prompted on every toggle.
+    private func obtainAuth() throws -> AuthorizationRef {
+        if let cached = cachedAuth { return cached }
+
         var auth: AuthorizationRef?
         let flags: AuthorizationFlags = [.interactionAllowed, .extendRights, .preAuthorize]
         let status = AuthorizationCreate(nil, nil, flags, &auth)
         guard status == errAuthorizationSuccess, let auth else {
             throw SystemProxyError.authorization("AuthorizationCreate -> \(status)")
         }
-        defer { AuthorizationFree(auth, []) }
+
+        // Pre-authorize `system.preferences` so SCPreferencesCommitChanges
+        // doesn't trigger a fresh prompt later. Granted rights stick to the
+        // AuthorizationRef for its lifetime.
+        var rightName = "system.preferences".cString(using: .utf8)!
+        let granted: AuthorizationFlags = [.interactionAllowed, .extendRights, .preAuthorize]
+        let copyStatus = rightName.withUnsafeMutableBufferPointer { buf -> OSStatus in
+            var item = AuthorizationItem(
+                name: buf.baseAddress!,
+                valueLength: 0, value: nil, flags: 0
+            )
+            return withUnsafeMutablePointer(to: &item) { itemPtr in
+                var rights = AuthorizationRights(count: 1, items: itemPtr)
+                return AuthorizationCopyRights(auth, &rights, nil, granted, nil)
+            }
+        }
+        if copyStatus != errAuthorizationSuccess {
+            AuthorizationFree(auth, [.destroyRights])
+            throw SystemProxyError.authorization("AuthorizationCopyRights system.preferences -> \(copyStatus)")
+        }
+
+        cachedAuth = auth
+        return auth
+    }
+
+    private func apply(on: Bool) throws {
+        let auth = try obtainAuth()
 
         guard let prefs = SCPreferencesCreateWithAuthorization(nil, "ChungHwa" as CFString, nil, auth) else {
             throw SystemProxyError.preferences("SCPreferencesCreateWithAuthorization returned nil")
