@@ -1,7 +1,6 @@
 # 05 · 路线图
 
-> 状态截至当前：M0–M4 全部落地，自用 v1 可日常使用。M5+ 大半也已完成。
-> 本文档逐条 mark done 而不是另起一份「已完成清单」，保留原始里程碑结构方便对照决策。
+> 状态：v0.1.0 已发布，自用版本日常可用。M0–M5 全部落地，M6 也已完成。
 
 ## M0 · 骨架与冒烟 ✅
 
@@ -25,7 +24,7 @@
 
 - [x] `MihomoStreamClient`（traffic / memory / connections / logs 全部 WebSocket）
 - [x] Connections 表格 + 过滤 + 关闭 + per-conn 实时速率（store 端 diff）
-- [x] Traffic 上下行曲线（Swift Charts，1/5/15min 范围切换）
+- [x] Traffic 上下行曲线（Swift Charts，1/5/15 min 范围切换）
 - [x] Logs WS 替换 ringbuffer
 - [x] Rules 列表 + provider 标识
 - [x] 出站模式切换（Rule / Global / Direct）
@@ -35,45 +34,66 @@
 
 - [x] Profile / Subscription 模型 + JSON 元数据
 - [x] URL 订阅 add / refresh / delete
-- [x] `subscription-userinfo` header 解析（流量、过期信息）
+- [x] `subscription-userinfo` header 解析
 - [x] Profiles Tab 卡片 + 一键更新
 - [x] 自动定时更新（默认 24h，UserDefaults 可调）
 - [x] 启动项 `LoginItemController`（SMAppService）
-- [x] 默认配置兜底：首次启动 `ProfileStore` 写一份 rule + DIRECT 的最小 yaml
+- [x] 默认配置兜底：首次启动写一份 rule + DIRECT 最小 yaml
+- [x] iCloud Drive 存储模式
 
-## M4 · 抛光 ✅（自用 v1）
+## M4 · 抛光 ✅
 
-- [x] DesignSystem：Bone & Brass on Patina（Newsreader serif + 深 teal / brass / bone 配色，`Core/Design/`）
-- [x] 跟随系统的 light / dark adaptive 调色板
-- [x] 自定义 yaml 编辑器（CodeEdit-style + 异步加载缓存）
-- [x] Icon Composer 应用图标 (`ChungHwa/AppIcon.icon`)，菜单栏 PNG (`Assets.xcassets/MenubarIcon.imageset`)
+- [x] DesignSystem：Bone & Brass on Patina
+- [x] light / dark adaptive 调色板
+- [x] yaml 编辑器（CodeEdit-style + 异步缓存）
+- [x] AppIcon（`AppIcon.appiconset` PNG 全套）+ 菜单栏 PNG
 - [x] 关于卡 / 入站端口 / 在 Finder 中打开等设置项
-- [x] 性能调优：`ChDot` 走 CoreAnimation 不再用 `TimelineView(.animation)`，所有 1Hz 数据在叶子子视图订阅，待机 CPU 从 23% 砍到 ~12%
+- [x] 性能：`ChDot` 改 CoreAnimation、所有 1Hz 数据走叶子订阅、StatusBar / Overview / Menubar 全拆叶子；待机 CPU 23% → ~5%
+- [x] 文案全局清洗（去 AI 味）
+- [x] 视图拆分：四个超长 view 文件拆成 14 个单一职责文件
 
-## M5+ · 进阶 / 已完成
+## M5 · 进阶 ✅
 
-- [x] **TUN 模式**：`tun: enable: true / stack: gvisor / auto-route` 由 ConfigComposer 注入；
-  `KernelPrivilegeHelper` 走 `osascript with administrator privileges` 一键 setuid root
-- [x] **DNS 设置 UI**：`DNSEditorSheet` 编辑主上游 + 兜底，支持 DoH / DoT / DoQ / UDP；
-  `enhanced-mode` (smart / system / fake-ip) + 53 端口劫持开关
-- [x] **自定义路由**：`RoutingEditor` 编辑 `[CustomRule]`（DOMAIN-* / IP-CIDR / GEOIP / PROCESS-NAME → DIRECT/PROXY/REJECT/groupName），
-  目前仅在使用默认配置时由 ConfigComposer 注入（带 `MATCH,DIRECT` 兜底）
-- [x] **节点延迟持久化**：`ProxyStore` 写到 `~/Library/Application Support/ChungHwa/proxy-delays.json`，
-  内核重启后仍保留上次测速结果直到下一次 testGroup 覆盖
-- [x] **GeoIP 国旗**：连接表的 region 列 + 概览的「直连 IP」「代理 IP」走 `GeoIPStore`（HTTPS via ipwho.is，本地 JSON 缓存）
-- [x] **入站端口可配置**：mixed-port 持久化到 UserDefaults，应用按钮触发 kernel restart + 系统代理重新启用
-- [x] **网络状态卡**：互联网 / DNS / 路由 / 直连 IP / 代理 IP（带国旗）
+- [x] **TUN 模式**：`KernelPrivilegeHelper` 一次 setuid root，gvisor 栈 + auto-route + auto-detect-interface
+- [x] **DNS 设置 UI**：`DNSEditorSheet` 主上游 + 兜底（DoH / DoT / DoQ / UDP），enhanced-mode (system / smart / fake-ip)，53 端口劫持开关真接到 yaml
+- [x] **自定义路由**：`RoutingEditor` 跨 profile 通用——splice 在 user yaml 的 `rules:` 之前永远先匹配
+- [x] **GeoIP 国旗**：Connections 地区列 + Overview 直连 IP / 代理 IP 都带国旗（`api.country.is` HTTPS）
+- [x] **入站端口可配置**：mixed-port 持久化，应用按钮链 `kernel.restart` + 系统代理重新启用
+- [x] **网络状态卡**：互联网 / DNS / 路由 + 直连 IP / 代理 IP
+- [x] **代理认证 + 系统代理 bypass list**：UI 接 ConfigComposer + SystemProxyController
+- [x] **`unified-delay` 真接通**：从死 UI 改成 yaml 注入 + restart
+- [x] **macOS 系统通知**：warning / error 级别同步给 `UNUserNotificationCenter`
+- [x] **系统代理一次提权**：`AuthorizationRef` 缓存到 controller 生命周期，不再每次切换都弹窗
+- [x] **kernel termination race fix**：`process === proc` 守卫——治了 TUN 重启后内核被误判崩溃的 bug
 
-## 没做 / 待定
+## M6 · 自我托管 + 分发 ✅
 
-- [ ] iOS 探索（要 NetworkExtension，性质上是另一个项目）
-- [ ] Web Dashboard 内嵌（用户自己开 yacd / metacubexd 即可）
-- [ ] 商业化 / 节点市场 / 自研协议 — 永久 non-goal
-- [ ] 公证 + DMG 打包 — 自用版本不需要
+- [x] SQLite 数据层（`Core/Storage/Database.swift`，WAL + `synchronous=NORMAL`）替代 proxy-delays.json / geoip-cache.json / traffic-history.json，首次启动一次性导入旧 JSON 再删
+- [x] UserDefaults 单一事实源（`ChungHwa.MixedPort` / `ChungHwa.TunEnabled` / `ChungHwa.DNS.*` / `ChungHwa.CustomRules` / `ChungHwa.Advanced.*`），composer + 探针 + UI 都从同一处读
+- [x] 身份脱敏：subsystem `com.tzaigroup.chunghwa` → `org.clash.ChungHwa`，删 `DEVELOPMENT_TEAM` Z6WHGX32Q8，git 历史 author 全部改 Claude
+- [x] DMG 打包脚本 `scripts/make-dmg.sh`（ad-hoc 签名、UDZO 压缩、`/Applications` 拖装符号链接）
+- [x] GitHub Actions release workflow：tag push (`v*`) → 三 DMG (universal / arm64 / x86_64) + SHA256SUMS 自动挂到 Release
+- [x] CHANGELOG.md（Keep a Changelog 格式）
+- [x] `.github/PULL_REQUEST_TEMPLATE.md` + `ISSUE_TEMPLATE/{bug_report, feature_request, question, config}.yml`
+- [x] Repo label 集（type / status / area / subsystem 四类共 35 个）
+- [x] 双语 README：默认英文，`README.zh-CN.md` 中文，README 顶部互相引用
+- [x] GPL v3 LICENSE
+- [x] 单元测试：ConfigComposer / ConfigStore / ConnectionsStore / GeoIPStore / ProxyStore / TrafficStore / TrafficHistoryStore（部分基于 Database 注入路径）
 
-## 节奏建议（保留原文供未来参考）
+## 没做 / 不打算做
 
-- 每周一次可演示构建
-- 不并行做超过两个 milestone 的事
-- 每个 PR / 分支聚焦单一 feature
-- 不确定的技术点先在 `06-open-questions.md` 起条目
+- [ ] **iOS 探索**——要 NetworkExtension，本质上是另一个项目
+- [ ] **Web Dashboard 内嵌**——用户自己开 yacd / metacubexd 接同一个 External Controller 即可
+- [ ] **公证**——自用版本不上架 / 不发行，不付 $99/yr Apple Developer Program；下载者第一次开需要 `xattr -dr com.apple.quarantine`
+- [ ] **沙盒化**——要把 mihomo 拆成 SMAppService daemon 跑，整个生命周期模型重写，自用版本不值
+- [ ] **TUN 二进制挪到 `/Library/PrivilegedHelperTools/com.tzaigroup.chunghwa.mihomo`**——目前 setuid 直接打在当前 active mihomo 上够用；未来要做发行版可以补
+- [ ] **商业化 / 节点市场 / 自研协议**——永久 non-goal
+
+## 还可以做的（feature 请求池，未排期）
+
+- [ ] 流量图缩放 / 长按 reveal 数值
+- [ ] 节点延迟历史曲线（不光是当前那个数）
+- [ ] PROCESS-NAME 规则的进程列表自动补全
+- [ ] yaml 编辑器加 mihomo 校验器（解析 + 高亮错误）
+- [ ] Trick：「直连公网 IP / 代理公网 IP 一致时」高亮提示用户代理可能没工作
+- [ ] 全局快捷键 / URL Scheme（`chunghwa://import?url=...`）
