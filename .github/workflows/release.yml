@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
 
     steps:
@@ -30,8 +30,18 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app
+      - name: Select latest Xcode
+        run: |
+          # Pick the highest-versioned Xcode installed on the runner —
+          # GitHub names them /Applications/Xcode_<version>.app.
+          XCODE="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [[ -z "$XCODE" ]]; then
+            echo "no Xcode_*.app found in /Applications" >&2
+            ls /Applications | grep -i xcode || true
+            exit 1
+          fi
+          echo "selecting $XCODE"
+          sudo xcode-select -s "$XCODE"
 
       - name: Show toolchain
         run: |
