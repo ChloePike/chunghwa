@@ -77,7 +77,7 @@ struct ProfilesView: View {
             )
         }
         .alert(
-            "删除配置？",
+            "删除这份配置？",
             isPresented: Binding(
                 get: { pendingDelete != nil },
                 set: { if !$0 { pendingDelete = nil } }
@@ -90,7 +90,7 @@ struct ProfilesView: View {
                 pendingDelete = nil
             }
         } message: { p in
-            Text("\(p.name) 将从中華中移除，操作无法撤销。")
+            Text("「\(p.name)」会被移除，无法恢复。")
         }
     }
 
@@ -103,7 +103,7 @@ struct ProfilesView: View {
                     .font(ChungHwa.Typography.serif(20, weight: .semibold))
                     .foregroundStyle(ChungHwa.Palette.text)
                     .tracking(-0.3)
-                Text("\(store.profiles.count) 个配置")
+                Text("\(store.profiles.count) 份")
                     .font(.system(size: 11.5))
                     .foregroundStyle(ChungHwa.Palette.dim)
             }
@@ -143,7 +143,7 @@ struct ProfilesView: View {
     }
 
     private var lastRefreshLabel: String {
-        guard let last = store.lastAutoRefresh else { return "从未" }
+        guard let last = store.lastAutoRefresh else { return "未拉取过" }
         let elapsed = Date.now.timeIntervalSince(last)
         if elapsed < 60 { return "刚刚" }
         let m = Int(elapsed / 60)
@@ -160,7 +160,7 @@ struct ProfilesView: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
-                Text("自动刷新间隔")
+                Text("自动拉取")
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(ChungHwa.Palette.dim)
                 Text(autoRefreshLabel)
@@ -171,7 +171,7 @@ struct ProfilesView: View {
                 Stepper("", value: autoRefreshBinding, in: 0...168, step: 1)
                     .labelsHidden()
                 Spacer(minLength: 8)
-                GhostButton(title: "全部刷新", systemImage: "arrow.clockwise") {
+                GhostButton(title: "立即拉取", systemImage: "arrow.clockwise") {
                     Task { await store.refreshAll() }
                 }
                 .opacity(hasURLProfiles ? 1 : 0.4)
@@ -188,7 +188,7 @@ struct ProfilesView: View {
                     .strokeBorder(ChungHwa.Palette.lineSoft, lineWidth: 0.5)
             )
 
-            Text("上次刷新: \(lastRefreshLabel)")
+            Text("上次拉取 \(lastRefreshLabel)")
                 .font(.system(size: 10))
                 .foregroundStyle(ChungHwa.Palette.faint)
                 .padding(.leading, 14)
@@ -230,9 +230,9 @@ struct ProfilesView: View {
     /// `ChSeg` doesn't speak "disabled option" so we mark unavailable iCloud
     /// by leaving its tap a no-op (handled in onChange via try/catch above).
     private var storageOptions: [(value: ProfileStore.StorageMode, label: String)] {
-        let cloudLabel = store.iCloudDriveAvailable ? "iCloud Drive" : "iCloud (未开启)"
+        let cloudLabel = store.iCloudDriveAvailable ? "iCloud Drive" : "iCloud（未开启）"
         return [
-            (.appSupport, "App Support"),
+            (.appSupport, "本地"),
             (.iCloudDrive, cloudLabel),
         ]
     }
@@ -245,7 +245,7 @@ struct ProfilesView: View {
             Text("还没有配置")
                 .font(ChungHwa.Typography.serif(16, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.text)
-            Text("导入 YAML 或粘贴订阅 URL 开始使用。")
+            Text("导入一个 YAML 或粘贴订阅链接。")
                 .font(.system(size: 12))
                 .foregroundStyle(ChungHwa.Palette.dim)
         }
@@ -291,7 +291,7 @@ struct ProfilesView: View {
                     style: StrokeStyle(lineWidth: 2, dash: [8, 4])
                 )
                 .padding(10)
-            Text("拖入 YAML 或订阅 URL")
+            Text("拖到这里")
                 .font(ChungHwa.Typography.serif(16, weight: .medium))
                 .foregroundStyle(ChungHwa.Palette.text)
                 .padding(.horizontal, 18)
@@ -377,7 +377,7 @@ struct ProfilesView: View {
 
     private func pickFile() {
         let panel = NSOpenPanel()
-        panel.title = "导入 yaml 配置"
+        panel.title = "选择 YAML"
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
@@ -503,7 +503,7 @@ private struct ProfileCard: View {
     private var activeBadge: some View {
         HStack(spacing: 4) {
             ChDot(color: ChungHwa.Palette.brass, size: 5, pulse: false)
-            Text("已激活")
+            Text("使用中")
                 .font(.system(size: 9.5, weight: .bold))
                 .tracking(0.7)
                 .foregroundStyle(ChungHwa.Palette.brassDark)
@@ -535,14 +535,14 @@ private struct ProfileCard: View {
     private var actionCluster: some View {
         HStack(spacing: 6) {
             if isActive {
-                BadgeButton(title: "已激活", systemImage: "checkmark", enabled: false) {}
+                BadgeButton(title: "使用中", systemImage: "checkmark", enabled: false) {}
             } else {
-                BadgeButton(title: "激活", systemImage: "play.fill", enabled: true, action: onActivate)
+                BadgeButton(title: "启用", systemImage: "play.fill", enabled: true, action: onActivate)
             }
             if profile.source.subscriptionURL != nil {
                 IconBadgeButton(systemImage: "arrow.clockwise",
                                 tint: ChungHwa.Palette.dim,
-                                help: "刷新订阅",
+                                help: "拉取订阅",
                                 action: onRefresh)
             }
             GhostMiniButton(title: "查看",
@@ -551,7 +551,7 @@ private struct ProfileCard: View {
                             action: onInspect)
             IconBadgeButton(systemImage: "trash",
                             tint: ChungHwa.Palette.earth,
-                            help: "删除配置",
+                            help: "删除",
                             action: onRequestDelete)
         }
     }
@@ -714,7 +714,7 @@ private struct ImportURLSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("导入订阅 URL")
+            Text("从 URL 导入")
                 .font(ChungHwa.Typography.serif(17, weight: .semibold))
                 .foregroundStyle(ChungHwa.Palette.text)
 
@@ -727,10 +727,10 @@ private struct ImportURLSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("名称（可选）")
+                Text("名称（可留空）")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ChungHwa.Palette.dim)
-                TextField("我的订阅", text: $urlName)
+                TextField("起个名字", text: $urlName)
                     .textFieldStyle(.roundedBorder)
             }
 
@@ -937,9 +937,9 @@ private struct YAMLInspectorSheet: View {
     private var sourceTag: String {
         switch profile.source {
         case .file:
-            return "文件"
+            return "本地文件"
         case .url(let url):
-            return "URL: \(url.host ?? url.absoluteString)"
+            return url.host ?? url.absoluteString
         }
     }
 
@@ -988,7 +988,7 @@ private struct YAMLInspectorSheet: View {
             .padding(.horizontal, 18)
         } else {
             ScrollView {
-                Text("在 \(yamlURL.path) 未找到内容")
+                Text("找不到 \(yamlURL.path)")
                     .font(ChungHwa.Typography.mono(11))
                     .foregroundStyle(ChungHwa.Palette.earth)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1026,7 +1026,7 @@ private struct YAMLInspectorSheet: View {
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .monospacedDigit()
             } else {
-                Text("0 字节 · 0 行")
+                Text("空文件")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.faint)
             }
@@ -1068,11 +1068,11 @@ private struct YAMLInspectorSheet: View {
             }
             Spacer(minLength: 0)
             if case .file = profile.source {
-                sheetGhostButton(title: "在 Finder 中显示", systemImage: "folder") {
+                sheetGhostButton(title: "在 Finder 显示", systemImage: "folder") {
                     NSWorkspace.shared.activateFileViewerSelecting([yamlURL])
                 }
             }
-            sheetGhostButton(title: "复制到剪贴板", systemImage: "doc.on.doc") {
+            sheetGhostButton(title: "复制内容", systemImage: "doc.on.doc") {
                 guard let s = displayContent else { return }
                 let pb = NSPasteboard.general
                 pb.clearContents()
@@ -1122,15 +1122,15 @@ private struct YAMLInspectorSheet: View {
         isEditing = false
 
         if profile.id == store.activeProfileID {
-            withAnimation { saveStatus = "正在重载 mihomo…" }
+            withAnimation { saveStatus = "重载中…" }
             Task {
                 await kernel.reload()
-                withAnimation { saveStatus = "已保存。" }
+                withAnimation { saveStatus = "已保存" }
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 withAnimation { saveStatus = nil }
             }
         } else {
-            withAnimation { saveStatus = "已保存。" }
+            withAnimation { saveStatus = "已保存" }
             Task {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 withAnimation { saveStatus = nil }

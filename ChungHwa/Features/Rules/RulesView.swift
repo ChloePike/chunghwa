@@ -115,8 +115,8 @@ struct RulesView: View {
     private var countText: String {
         let total = store.rules.count
         let shown = filtered.count
-        if shown == total { return "\(total) 条规则" }
-        return "\(shown) / \(total) 条规则"
+        if shown == total { return "\(total) 条" }
+        return "\(shown) / \(total) 条"
     }
 
     // MARK: - Type filter chips
@@ -142,7 +142,7 @@ struct RulesView: View {
                 .padding(.vertical, 1)
             }
             if hasActiveFilter {
-                Text("显示 \(filtered.count) / \(store.rules.count)")
+                Text("\(filtered.count) / \(store.rules.count)")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .monospacedDigit()
@@ -204,7 +204,7 @@ struct RulesView: View {
                                 .font(.system(size: 10.5))
                                 .foregroundStyle(ChungHwa.Palette.faint)
                             Spacer(minLength: 0)
-                            Text("\(p.ruleCount) 条规则")
+                            Text("\(p.ruleCount) 条")
                                 .font(.system(size: 11))
                                 .foregroundStyle(ChungHwa.Palette.dim)
                                 .monospacedDigit()
@@ -258,18 +258,18 @@ struct RulesView: View {
     private var card: some View {
         ChCard(padding: 0) {
             if kernel.apiClient == nil {
-                emptyState(title: "内核未运行",
+                emptyState(title: "内核未启动",
                            system: "powerplug",
-                           subtitle: "mihomo 启动后规则会显示在这里。")
+                           subtitle: "启动 mihomo 后这里会显示规则。")
             } else {
                 VStack(spacing: 0) {
                     headerRow
                     if filtered.isEmpty {
-                        emptyState(title: store.rules.isEmpty ? "暂无规则" : "无匹配",
+                        emptyState(title: store.rules.isEmpty ? "没有规则" : "无匹配",
                                    system: "list.bullet.rectangle",
                                    subtitle: store.rules.isEmpty
-                                       ? "请加载含路由规则的配置。"
-                                       : "请换一个搜索词。")
+                                       ? "当前配置里没有路由规则。"
+                                       : "换个关键词试试。")
                     } else {
                         rowList
                     }
@@ -283,7 +283,7 @@ struct RulesView: View {
             index:  { headerCell("#", alignment: .leading) },
             type:   { headerCell("类型", alignment: .leading) },
             match:  { headerCell("匹配", alignment: .leading) },
-            action: { headerCell("动作", alignment: .leading) },
+            action: { headerCell("去向", alignment: .leading) },
             hits:   { headerCell("命中", alignment: .trailing) }
         )
         .padding(.horizontal, 14)

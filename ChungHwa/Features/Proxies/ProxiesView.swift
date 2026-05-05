@@ -7,7 +7,7 @@ private enum ProxySort: Hashable, CaseIterable {
     var label: String {
         switch self {
         case .latency:      return "延迟"
-        case .name:         return "名字"
+        case .name:         return "名称"
         case .defaultOrder: return "默认"
         }
     }
@@ -135,7 +135,7 @@ struct ProxiesView: View {
                 onChange: { sort = $0 },
                 options: [
                     (.latency, "延迟"),
-                    (.name, "名字"),
+                    (.name, "名称"),
                     (.defaultOrder, "默认"),
                 ]
             )
@@ -164,7 +164,7 @@ struct ProxiesView: View {
             }
             .buttonStyle(.plain)
             .disabled(kernel.apiClient == nil)
-            .help("测试所有组延迟")
+            .help("测试所有组")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
@@ -182,10 +182,10 @@ struct ProxiesView: View {
         VStack(spacing: 12) {
             Image(systemName: "powerplug")
                 .font(.system(size: 44)).foregroundStyle(ChungHwa.Palette.faint)
-            Text("内核未运行")
+            Text("内核未启动")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(ChungHwa.Palette.text)
-            Text("在概览页启动内核以查看代理分组。")
+            Text("在概览页启动后再来。")
                 .font(.system(size: 12))
                 .foregroundStyle(ChungHwa.Palette.dim)
         }
@@ -195,10 +195,10 @@ struct ProxiesView: View {
         VStack(spacing: 12) {
             Image(systemName: "rectangle.stack.badge.minus")
                 .font(.system(size: 44)).foregroundStyle(ChungHwa.Palette.faint)
-            Text("暂无代理分组")
+            Text("没有代理组")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(ChungHwa.Palette.text)
-            Text("当前配置不含 `proxy-groups`，请在设置里编辑 YAML。")
+            Text("当前配置里没有 proxy-groups。")
                 .font(.system(size: 12))
                 .foregroundStyle(ChungHwa.Palette.dim)
             if let err = store.lastError {
@@ -397,7 +397,7 @@ private struct ProxyGroupCard: View {
                             RoundedRectangle(cornerRadius: 3, style: .continuous)
                                 .fill(ChungHwa.Palette.fill)
                         )
-                    Text("\(group.all?.count ?? 0) 节点")
+                    Text("\(group.all?.count ?? 0) 个")
                         .font(.system(size: 10.5))
                         .foregroundStyle(ChungHwa.Palette.faint)
                 }
@@ -424,7 +424,7 @@ private struct ProxyGroupCard: View {
     private var selectedSubtitle: some View {
         if let now = group.now {
             HStack(spacing: 6) {
-                Text("已选:")
+                Text("当前")
                     .font(.system(size: 11))
                     .foregroundStyle(ChungHwa.Palette.dim)
                 Text(now)
@@ -448,7 +448,7 @@ private struct ProxyGroupCard: View {
     private func fastestPill(ms: Int) -> some View {
         HStack(spacing: 5) {
             ChDot(color: ChLatency.color(ms), size: 5)
-            Text("最快 \(ms) ms")
+            Text("最低 \(ms) ms")
                 .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(ChLatency.color(ms))
                 .monospacedDigit()
@@ -484,7 +484,7 @@ private struct ProxyGroupCard: View {
         }
         .buttonStyle(.plain)
         .disabled(isTesting || kernel.apiClient == nil)
-        .help(isTesting ? "测试中…" : "测试该组延迟")
+        .help(isTesting ? "测试中…" : "测试该组")
     }
 
     // MARK: body
@@ -492,7 +492,7 @@ private struct ProxyGroupCard: View {
     @ViewBuilder
     private func body(for names: [String]) -> some View {
         if names.isEmpty {
-            Text("没有匹配 \"\(query)\" 的节点")
+            Text("没有匹配 “\(query)” 的节点")
                 .font(.system(size: 11.5))
                 .foregroundStyle(ChungHwa.Palette.faint)
                 .frame(maxWidth: .infinity)
@@ -537,11 +537,11 @@ private struct ProxyGroupCard: View {
     private var listHeader: some View {
         HStack(spacing: 10) {
             Spacer().frame(width: 13)
-            Text("名字")
+            Text("名称")
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("协议")
                 .frame(width: 90, alignment: .leading)
-            Text("测试")
+            Text("状态")
                 .frame(width: 70, alignment: .leading)
             Text("延迟")
                 .frame(width: 70, alignment: .trailing)
@@ -617,7 +617,7 @@ private struct NodeCard: View, Equatable {
         }
         .buttonStyle(.plain)
         .disabled(!isSwitchable && !isSelected)
-        .help(isSwitchable ? "点击选择" : "由 \(proxy?.type ?? "分组") 自动选择")
+        .help(isSwitchable ? "点击切换" : "由 \(proxy?.type ?? "分组") 自动选")
     }
 
     private var row1: some View {
@@ -660,7 +660,7 @@ private struct NodeCard: View, Equatable {
                         .controlSize(.mini)
                         .scaleEffect(0.6)
                         .frame(width: 8, height: 8)
-                    Text("测试中…")
+                    Text("测试中")
                         .font(.system(size: 10.5, weight: .semibold))
                         .foregroundStyle(ChungHwa.Palette.brass)
                         .monospacedDigit()
@@ -748,7 +748,7 @@ private struct NodeRow: View, Equatable {
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(ChungHwa.Palette.faint)
                     .frame(width: 90, alignment: .leading)
-                Text(pingValue > 0 ? "已测" : "—")
+                Text(pingValue > 0 ? "已测" : "未测")
                     .font(.system(size: 10.5))
                     .foregroundStyle(ChungHwa.Palette.dim)
                     .frame(width: 70, alignment: .leading)
@@ -764,7 +764,7 @@ private struct NodeRow: View, Equatable {
         }
         .buttonStyle(.plain)
         .disabled(!isSwitchable && !isSelected)
-        .help(isSwitchable ? "点击选择" : "由 \(proxy?.type ?? "分组") 自动选择")
+        .help(isSwitchable ? "点击切换" : "由 \(proxy?.type ?? "分组") 自动选")
     }
 
     private var radio: some View {

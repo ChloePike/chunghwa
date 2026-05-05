@@ -171,7 +171,7 @@ struct ConnectionsView: View {
                     .strokeBorder(ChungHwa.Palette.line, lineWidth: 0.5)
             )
 
-            Text("\(activeCount) 活跃 · \(rows.count) 总数")
+            Text("\(activeCount) / \(rows.count)")
                 .font(.system(size: 11))
                 .foregroundStyle(ChungHwa.Palette.dim)
                 .monospacedDigit()
@@ -246,9 +246,9 @@ struct ConnectionsView: View {
     private var card: some View {
         ChCard(padding: 0) {
             if kernel.apiClient == nil {
-                emptyState(title: "内核未运行",
+                emptyState(title: "内核未启动",
                            system: "powerplug",
-                           subtitle: "mihomo 启动后连接会显示在这里。")
+                           subtitle: "启动 mihomo 后这里会显示连接。")
             } else {
                 // Compute column widths ONCE from the card's frame and feed
                 // them into header + every row. Replaces a per-row
@@ -259,9 +259,9 @@ struct ConnectionsView: View {
                     VStack(spacing: 0) {
                         headerRow(widths: widths)
                         if rows.isEmpty {
-                            emptyState(title: "无活跃连接",
+                            emptyState(title: "暂无连接",
                                        system: "link.circle",
-                                       subtitle: "访问网站后会显示被代理的连接。")
+                                       subtitle: "上网后被代理的连接会出现在这里。")
                         } else {
                             rowList(widths: widths)
                         }
@@ -275,11 +275,11 @@ struct ConnectionsView: View {
     private func headerRow(widths: ConnectionsColumnWidths) -> some View {
         ConnectionsGridRow(
             widths:  widths,
-            region:  { headerCell("地区", alignment: .center) },
+            region:  { headerCell("", alignment: .center) },
             host:    { headerCell("主机", alignment: .leading) },
             process: { headerCell("进程", alignment: .leading) },
-            down:    { headerCell("下载", alignment: .trailing) },
-            up:      { headerCell("上传", alignment: .trailing) },
+            down:    { headerCell("下行", alignment: .trailing) },
+            up:      { headerCell("上行", alignment: .trailing) },
             rule:    { headerCell("规则", alignment: .leading) }
         )
         .padding(.horizontal, 14)
@@ -437,7 +437,7 @@ struct ConnectionsView: View {
                 Task { await store.close(id: id, api: api) }
             }
         } label: {
-            Label("关闭连接", systemImage: "xmark.circle")
+            Label("断开", systemImage: "xmark.circle")
         }
         .disabled(ids.isEmpty)
     }
@@ -769,7 +769,7 @@ private struct ConnectionInspector: View {
             right: {
                 HStack(spacing: 6) {
                     if ended {
-                        Text("连接已结束")
+                        Text("已结束")
                             .font(.system(size: 10, weight: .semibold))
                             .tracking(0.3)
                             .textCase(.uppercase)
@@ -794,7 +794,7 @@ private struct ConnectionInspector: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .help("关闭面板")
+                    .help("关闭")
                 }
             }
         ) {
@@ -930,7 +930,7 @@ private struct ConnectionInspector: View {
                 HStack(spacing: 6) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
-                    Text("关闭连接")
+                    Text("断开")
                         .font(.system(size: 11.5, weight: .semibold))
                 }
                 .foregroundStyle(.white)

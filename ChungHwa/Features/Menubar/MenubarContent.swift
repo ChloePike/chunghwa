@@ -146,7 +146,7 @@ struct MenubarContent: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .help(kernelReady ? "出站模式" : "切换模式需要内核运行中")
+        .help(kernelReady ? "出站模式" : "需要内核运行中")
     }
 
     private var modePickerBinding: Binding<MihomoMode?> {
@@ -166,7 +166,7 @@ struct MenubarContent: View {
         if proxyStore.groups.isEmpty {
             MenubarRowLabel(
                 icon: "globe",
-                title: "无可用代理组",
+                title: "没有代理组",
                 trailing: nil,
                 showsChevron: false
             )
@@ -259,7 +259,7 @@ struct MenubarContent: View {
             Button(action: { NSApp.terminate(nil) }) {
                 MenubarRowLabel(
                     icon: "power",
-                    title: "退出中華",
+                    title: "退出",
                     trailing: "⌘Q",
                     showsChevron: false,
                     tint: ChungHwa.Palette.earth
@@ -424,7 +424,7 @@ private struct ProfilePickerRow: View {
         Button { presented = true } label: {
             MenubarRowLabel(
                 icon: "doc.text",
-                title: "切换配置",
+                title: "配置",
                 trailing: profiles.first(where: { $0.id == activeID })?.name ?? "—",
                 showsChevron: true
             )
@@ -454,7 +454,7 @@ private struct NodeListPopover: View {
             // active group had many members. Lazy is near-instant.
             LazyVStack(spacing: 0) {
                 if names.isEmpty {
-                    Text("（无节点）")
+                    Text("没有节点")
                         .font(.system(size: 11.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
                         .padding(.vertical, 10)
@@ -484,7 +484,7 @@ private struct ProfileListPopover: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 if profiles.isEmpty {
-                    Text("（暂无配置）")
+                    Text("没有配置")
                         .font(.system(size: 11.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
                         .padding(.vertical, 10)

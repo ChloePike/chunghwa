@@ -20,8 +20,8 @@ struct TopologyView: View {
             if kernel.apiClient == nil {
                 emptyState(
                     symbol: "powerplug",
-                    title: "内核未运行",
-                    subtitle: "在「概览」中启动内核以查看活跃拓扑。"
+                    title: "内核未启动",
+                    subtitle: "在概览页启动后再来看。"
                 )
             } else if store.groups.isEmpty && store.isRefreshing {
                 ProgressView().controlSize(.large)
@@ -29,14 +29,14 @@ struct TopologyView: View {
             } else if store.groups.isEmpty {
                 emptyState(
                     symbol: "point.3.connected.trianglepath.dotted",
-                    title: "暂无代理组",
-                    subtitle: "当前配置文件定义 `proxy-groups` 后将渲染拓扑。"
+                    title: "没有代理组",
+                    subtitle: "当前配置里没有 proxy-groups。"
                 )
             } else if connectionsStore.connections.isEmpty {
                 emptyState(
                     symbol: "point.3.connected.trianglepath.dotted",
-                    title: "暂无活跃连接",
-                    subtitle: "打开浏览器或启动应用产生流量后会显示拓扑。"
+                    title: "暂无连接",
+                    subtitle: "上网产生流量后这里会画出拓扑。"
                 )
             } else {
                 content
@@ -93,7 +93,7 @@ struct TopologyView: View {
                 header(model: model, activity: activity)
                 TopologyDiagram(model: model)
                     .padding(.bottom, 4)
-                Text("路径粗细和颜色对应活跃连接数")
+                Text("线条越粗越亮，表示走的连接越多")
                     .font(.system(size: 10))
                     .foregroundStyle(ChungHwa.Palette.faint)
                     .padding(.bottom, 8)
@@ -106,11 +106,11 @@ struct TopologyView: View {
     private func header(model: TopologyModel, activity: TopologyActivity) -> some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("活跃拓扑")
+                Text("拓扑")
                     .font(ChungHwa.Typography.serif(22, weight: .medium))
                     .foregroundStyle(ChungHwa.Palette.text)
                     .tracking(-0.3)
-                Text("\(model.groups.count) 组 · \(model.upstreams.count) 上游 · \(activity.totalConnections) 个活跃连接")
+                Text("\(model.groups.count) 组 · \(model.upstreams.count) 上游 · \(activity.totalConnections) 个连接")
                     .font(.system(size: 12))
                     .foregroundStyle(ChungHwa.Palette.dim)
             }
@@ -132,7 +132,7 @@ struct TopologyView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11, weight: .semibold))
                 }
-                Text(store.isRefreshing ? "刷新中" : "刷新")
+                Text(store.isRefreshing ? "刷新中…" : "刷新")
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(ChungHwa.Palette.text)
@@ -296,7 +296,7 @@ private struct TopologyModel {
             id: "GLOBAL",
             kind: .root,
             title: "全局",
-            subtitle: "模式：规则",
+            subtitle: "规则模式",
             lastDelay: nil,
             position: rootPos,
             isActive: true,
@@ -446,9 +446,9 @@ private struct TopologyDiagram: View {
             if acc[n.kind] == nil { acc[n.kind] = n.position.x }
         }
         let labels: [(TopologyModel.Node.Kind, String)] = [
-            (.root,     "根节点"),
+            (.root,     "入口"),
             (.group,    "代理组"),
-            (.upstream, "上游节点"),
+            (.upstream, "上游"),
         ]
         return ZStack(alignment: .topLeading) {
             ForEach(labels, id: \.0) { kind, text in

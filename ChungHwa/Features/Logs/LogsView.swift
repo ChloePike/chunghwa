@@ -113,10 +113,10 @@ struct LogsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "square.and.arrow.down")
                         .font(.system(size: 9, weight: .semibold))
-                    Text("保存")
+                    Text("导出")
                 }
             }
-            .help("将当前日志导出为文件")
+            .help("导出为文本文件")
         }
     }
 
@@ -163,7 +163,7 @@ struct LogsView: View {
                 .foregroundStyle(ChungHwa.Palette.earth)
                 .monospacedDigit()
         } else {
-            Text("\(visible) / \(total) 行")
+            Text("\(visible) / \(total)")
                 .font(ChungHwa.Typography.mono(11))
                 .foregroundStyle(ChungHwa.Palette.faint)
                 .monospacedDigit()
@@ -256,7 +256,7 @@ struct LogsView: View {
         let defaultFilename = "chunghwa-logs-\(Self.exportFilenameFormatter.string(from: Date())).txt"
 
         let panel = NSSavePanel()
-        panel.title = "保存日志"
+        panel.title = "导出日志"
         panel.allowedContentTypes = [.plainText]
         panel.nameFieldStringValue = defaultFilename
 

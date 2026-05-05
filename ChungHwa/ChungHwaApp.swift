@@ -164,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notificationCenterStore.post(
             source: "内核",
             level: .info,
-            message: "mihomo \(latest) 已发布 · 打开 设置 → 更新内核"
+            message: "mihomo \(latest) 可更新（设置 → 内核）"
         )
     }
 

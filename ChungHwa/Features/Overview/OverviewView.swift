@@ -708,7 +708,7 @@ private struct SubscriptionHealthCard: View {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 10))
                         .foregroundStyle(ChungHwa.Palette.dim)
-                    Text("上次更新")
+                    Text("更新于")
                         .font(.system(size: 10.5))
                         .foregroundStyle(ChungHwa.Palette.dim)
                     Text(updatedAtText)
@@ -716,7 +716,7 @@ private struct SubscriptionHealthCard: View {
                         .foregroundStyle(ChungHwa.Palette.text)
                     Spacer(minLength: 0)
                     Button { switchTab(.profiles) } label: {
-                        Text("管理配置 →")
+                        Text("管理 →")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(ChungHwa.Palette.brass)
                             .contentShape(Rectangle())
@@ -744,7 +744,7 @@ private struct SubscriptionHealthCard: View {
             HStack(spacing: 4) {
                 Image(systemName: refreshing ? "hourglass" : "arrow.clockwise")
                     .font(.system(size: 10, weight: .semibold))
-                Text("更新订阅")
+                Text("拉取订阅")
                     .font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(ChungHwa.Palette.bone)
