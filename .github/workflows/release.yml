@@ -1,7 +1,7 @@
 name: Release DMG
 
-# Builds an unsigned (ad-hoc) ChungHwa.dmg and attaches it to a GitHub
-# Release. Triggered by pushing a tag matching `v*`.
+# Builds three unsigned (ad-hoc) DMGs in parallel — universal / arm64 /
+# x86_64 — and attaches them to a GitHub Release on `v*` tag push.
 #
 # Unsigned: no Apple Developer ID, no notarization, no identity in CI.
 # Users get a Gatekeeper warning on first open; the release notes tell
@@ -12,7 +12,7 @@ on:
   push:
     tags:
       - 'v*'
-  # Manual trigger: builds the DMG as an artifact without making a release.
+  # Manual trigger: builds DMGs as artifacts without making a release.
   workflow_dispatch: {}
 
 permissions:
@@ -20,8 +20,13 @@ permissions:
 
 jobs:
   build:
+    name: Build (${{ matrix.arch }})
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [universal, arm64, x86_64]
 
     steps:
       - name: Checkout
@@ -48,7 +53,7 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Build three slices — universal, arm64, x86_64
+      - name: Build ${{ matrix.arch }} slice
         env:
           # Authenticated api.github.com quota for fetch-mihomo.sh.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,23 +65,52 @@ jobs:
           PROVISIONING_PROFILE_SPECIFIER: ""
         run: |
           chmod +x scripts/make-dmg.sh scripts/fetch-mihomo.sh
-          VERSION="${GITHUB_REF_NAME#v}"
-          # Universal first (script will fetch the universal mihomo from
-          # GitHub releases). Arch-specific builds run after and lipo-thin
-          # mihomo locally before xcodebuild.
-          ./scripts/make-dmg.sh "$VERSION" universal
-          ./scripts/make-dmg.sh "$VERSION" arm64
-          ./scripts/make-dmg.sh "$VERSION" x86_64
+          # Tag push: VERSION = tag minus leading v. Manual dispatch:
+          # let make-dmg.sh fall back to Info.plist's CFBundleShortVersionString.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=""
+          fi
+          ./scripts/make-dmg.sh "$VERSION" "${{ matrix.arch }}"
 
-      - name: Hash + list artifact
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunghwa-${{ matrix.arch }}
+          path: build/ChungHwa-*-${{ matrix.arch }}.dmg
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout (for CHANGELOG.md)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download all DMG artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: build
+          pattern: chunghwa-*
+          merge-multiple: true
+
+      - name: Hash + list
         run: |
           cd build
+          ls -lh
           shasum -a 256 *.dmg > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          ls -lh
 
       - name: Build release notes from CHANGELOG.md
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
@@ -119,17 +153,7 @@ jobs:
           echo "--- composed release notes ---"
           cat build/RELEASE_NOTES.md
 
-      - name: Upload artifact (always, even on workflow_dispatch)
-        uses: actions/upload-artifact@v4
-        with:
-          name: chunghwa-dmg
-          path: |
-            build/*.dmg
-            build/SHA256SUMS.txt
-          retention-days: 30
-
-      - name: Attach to release (only on tag push)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Attach to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
